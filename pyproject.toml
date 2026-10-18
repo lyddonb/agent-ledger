@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-ledger"
+version = "0.0.1"
+description = "Tamper-evident, hash-chained records of what AI agents did in a repo, and why."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Beau Lyddon"}]
+requires-python = ">=3.10"
+dependencies = []  # standard library only, by design (see README)
+
+[project.scripts]
+ledger = "agent_ledger.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
