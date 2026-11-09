@@ -4,7 +4,7 @@ A tamper-evident record of what AI agents did in your repo, and why.
 
 agent-ledger is the runtime behind **governed agent runs**. Before a large run starts, a person approves its charter (goal, gates, budget). As the run proceeds, agents write a hash-chained ledger of their decisions, gate answers, verification results and spend. Session transcripts are archived beside it, redacted. CI verifies every chain on every PR, so an auditor can reconstruct how any merged change was approved, built, tested and reviewed, without trusting the agent that wrote it.
 
-> **Status: pre-M0.** The specs are written and the CLI is a stub. Nothing here records anything yet. See [the roadmap](ROADMAP.md) and the [draft M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md).
+> **Status: M0 in progress.** `ledger verify RUN_FOLDER` checks one run's hash chain. Nothing writes entries yet: `init` and `append` come next, and the other commands are stubs. The entry format is unfrozen until v1 is tagged. See [the roadmap](ROADMAP.md) and the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md).
 
 ## How it fits with agent-kit and agentfiles
 
