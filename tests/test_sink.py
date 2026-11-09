@@ -214,6 +214,25 @@ class RepoSinkTest(unittest.TestCase):
             with self.assertRaisesRegex(LedgerError, "replaced during the write"):
                 self.sink.write(entry)
 
+    def test_spend_entries_follow_the_s3_shape(self):
+        from agent_ledger.entry import EntryError
+        self.start()
+        good = {"usd_micros": 4250000, "tokens": 812345, "cache_read_tokens": 9000000, "wall_s": 5400,
+                "estimate": True, "note": "other keys are allowed"}
+        append(self.sink, RUN_ID, actor=AGENT, type=EntryType.SPEND, summary="s", why="w", data=good)
+        bad_cases = {
+            "no usd_micros": {"tokens": 1},
+            "negative": {"usd_micros": -1},
+            "bool as count": {"usd_micros": True},
+            "string count": {"usd_micros": 1, "tokens": "812345"},
+            "non-bool estimate": {"usd_micros": 1, "estimate": 1},
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(name), self.assertRaises(EntryError):
+                append(self.sink, RUN_ID, actor=AGENT, type=EntryType.SPEND, summary="s", why="w", data=data)
+        append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="s", why="w",
+               data={"usd_micros": "only spend entries are checked"})
+
     def test_seal_is_an_honest_stub(self):
         with self.assertRaisesRegex(NotImplementedError, "unit 4"):
             self.sink.seal(RUN_ID, "0" * 64, "abc")
