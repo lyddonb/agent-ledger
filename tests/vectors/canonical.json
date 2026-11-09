@@ -191,6 +191,39 @@
   }
  },
  {
+  "name": "depth 32 is the limit",
+  "expect": "ok",
+  "repeat": {
+   "prefix": "{\"a\":",
+   "open": "[",
+   "close": "]",
+   "times": 31,
+   "suffix": "}"
+  }
+ },
+ {
+  "name": "depth 33",
+  "expect": "bad-json",
+  "repeat": {
+   "prefix": "{\"a\":",
+   "open": "[",
+   "close": "]",
+   "times": 32,
+   "suffix": "}"
+  }
+ },
+ {
+  "name": "depth 600, past Python recursion in the encoder",
+  "expect": "bad-json",
+  "repeat": {
+   "prefix": "{\"a\":",
+   "open": "[",
+   "close": "]",
+   "times": 599,
+   "suffix": "}"
+  }
+ },
+ {
   "name": "invalid UTF-8",
   "expect": "bad-utf8",
   "hex": "7b2273223a22ff227d"

@@ -36,7 +36,14 @@ One JSON object per line:
 | `prev` | The previous entry's hash, or `genesis:<run-id>` for the first |
 | `hash` | SHA-256 of this entry's canonical JSON (sorted keys, no spaces) without `hash` |
 
-Every field is always present. `evidence` is a list of strings and may be empty; `data` is an object and may be empty. No other keys are allowed. `summary`, `why` and each evidence pointer are non-empty and one line: no control characters and no U+2028 or U+2029. `run_id` is `<yyyy-mm-dd>-<slug>` (S1) and equals the run folder's name. `approval` and `gate-answer` entries have a human actor (S2). An agent actor has exactly `kind`, `id`, `on_behalf_of`, `tool`, `model` and `session`; a human actor has exactly `kind`, `id` and `on_behalf_of`. All are non-empty strings.
+Every field is always present, and no other keys are allowed. The v1 rules, exactly:
+
+- `seq`: an integer from 1 to 2^53−1. `prev` is `genesis:<run_id>` when `seq` is 1, and otherwise 64 lowercase hex characters, as is `hash`.
+- `ts`: matches `[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z` and is a real Gregorian date and time with seconds 00 to 59 (no leap second).
+- `run_id`: matches `[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*` (S1's `<yyyy-mm-dd>-<slug>`), the date is a real date, and it equals the run folder's name.
+- Text: `summary`, `why`, each `evidence` item and each actor field are non-empty strings containing no U+0000 to U+001F, no U+007F to U+009F, and no U+2028 or U+2029.
+- `evidence` is a list of text strings and may be empty. `data` is an object and may be empty.
+- `actor`: an agent has exactly `kind` (`"agent"`), `id`, `on_behalf_of`, `tool`, `model` and `session`; a human has exactly `kind` (`"human"`), `id` and `on_behalf_of`. `approval` and `gate-answer` entries have a human actor (S2).
 
 > **Open (spend amounts):** format v1 has no floating-point numbers (see below), so `spend` can't carry `usd: 4.25`. The proposal is integer `usd_micros`. Decide before v1 is frozen at the `public-api` gate.
 
@@ -44,18 +51,18 @@ Every field is always present. `evidence` is a list of strings and may be empty;
 
 This section is normative. A verifier in any language must agree with it byte for byte; `tests/vectors/` holds golden vectors and a golden ledger.
 
-- **Values.** A strict subset of JSON: `null`, `true`, `false`, integers, strings, arrays and objects. Integers have no fraction or exponent and lie within ±(2^53−1). There are no floats, `NaN` or `Infinity`. Object keys match `[a-z][a-z0-9_]{0,63}` and are unique. Strings are Unicode scalar values: a lone surrogate, raw or escaped, is invalid. No Unicode normalization is applied anywhere.
+- **Values.** A strict subset of JSON: `null`, `true`, `false`, integers, strings, arrays and objects. Integers have no fraction or exponent and lie within ±(2^53−1). There are no floats, `NaN` or `Infinity`. Object keys match `[a-z][a-z0-9_]{0,63}` and are unique. Strings are Unicode scalar values: a lone surrogate, raw or escaped, is invalid. Arrays and objects nest at most 32 deep, counting the line's top-level object as 1. No Unicode normalization is applied anywhere.
 - **Encoding.** RFC 8785 (JCS) for these values: no whitespace; object members sorted by key (keys are ASCII, so byte order equals code-point order); integers in shortest decimal form, with no `-0`; strings escape `"` and `\` and use `\b \f \n \r \t`, write every other U+0000 to U+001F as `\u00xx` in lowercase hex, and write everything else, including `/`, DEL and non-ASCII, as raw UTF-8.
 - **Hash.** `hash` is the lowercase hex SHA-256 of the canonical encoding of the entry without its `hash` member.
 - **Lines.** Each line of `ledger.jsonl` is the canonical encoding of the whole entry, `hash` included, followed by one LF. The file is UTF-8 with no BOM, no CR and no blank lines, and ends with LF. A verifier compares the line's bytes with the canonical encoding of what it parsed, so a whitespace, escape or key-order edit is an error, never normalized away.
 
 ### What `ledger verify` detects
 
-Each line is linked to the previous line's stored `seq` and `hash`, so a problem is reported on the line where it shows, not on every line after it.
+Each line is linked to the previous line's stored `seq` and `hash`, so a problem is reported first on the line where it shows, not on every line after it. When a line can't be parsed, the next line's links are unchecked; the run fails, but a deletion right after an unreadable line isn't reported on its own. A `ledger.jsonl` that is a symlink or not a regular file fails (`not-a-file`). Messages quote found values ASCII-escaped and truncated.
 
 | Change to the file | Reported |
 |---|---|
-| Any changed byte | On the changed line (`non-canonical`, `bad-json`, `schema` or `hash-mismatch`) |
+| Any changed byte | First on the changed line (`non-canonical`, `bad-json`, `schema` or `hash-mismatch`); a change to `seq` or `hash` also shows on the next line |
 | A line edited and its hash recomputed | On the next line (`prev-mismatch`) |
 | A deleted line, other than the last | On the line after the gap (`seq-mismatch`, `prev-mismatch`) |
 | Two lines swapped | On the first moved line and the lines around each move |

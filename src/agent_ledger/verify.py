@@ -8,11 +8,13 @@ rewriting a suffix with recomputed hashes is not, until seals and `verify --base
 from __future__ import annotations
 
 import enum
+import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Union
 
-from ._canon import CanonError, parse_canonical
+from ._canon import CanonError, parse_canonical, show
 from .entry import GENESIS_PREFIX, RUN_ID_RE, ChainHead, Entry, EntryError, decode_entry
 
 LEDGER_FILE = "ledger.jsonl"
@@ -24,6 +26,7 @@ class Kind(str, enum.Enum):
 
     # whole file (line 0)
     MISSING_LEDGER = "missing-ledger"
+    NOT_A_FILE = "not-a-file"        # ledger.jsonl is a symlink, folder, device or pipe
     EMPTY_LEDGER = "empty-ledger"
     BAD_RUN_FOLDER = "bad-run-folder"
     # framing
@@ -46,7 +49,7 @@ class Kind(str, enum.Enum):
 class Problem:
     line: int  # 1-based line in ledger.jsonl; 0 means the whole file
     kind: Kind
-    message: str  # expected vs found; never quotes the entry's free text
+    message: str  # expected vs found; found values pass through _canon.show (ASCII, bounded)
 
 
 @dataclass(frozen=True)
@@ -77,13 +80,15 @@ def _int(value: Any) -> int | None:
 
 
 def verify_bytes(run_id: str, data: bytes) -> Report:
-    """Check one run's ledger bytes. Pure. Reports every problem, each on the line where it shows.
+    """Check one run's ledger bytes. Pure. Reports every problem, first on the line where it shows.
 
     Each line is linked to the previous line's *stored* seq and hash, even when that line's own
-    hash is wrong. So an edited line is reported once, on that line, instead of breaking every
-    line after it; an edit with a recomputed hash shows up as a prev-mismatch on the next line;
-    and a deleted line shows up only on the line after the gap. When a line can't be parsed at
-    all, the next line's links are unchecked, not passed: the run already fails.
+    hash is wrong, so an edit doesn't break every line after it. An edited line is reported on
+    that line (and on the next one too if the edit touched its seq or hash); an edit with a
+    recomputed hash shows up as a prev-mismatch on the next line; a deleted line shows up only
+    on the line after the gap. When a line can't be parsed at all, the next line's links are
+    unchecked, not passed: the run already fails, but a deletion right after an unreadable line
+    is not reported separately.
     """
     problems: list[Problem] = []
     entries: list[Entry] = []
@@ -120,12 +125,12 @@ def verify_bytes(run_id: str, data: bytes) -> Report:
         if link is not None:
             want_seq, want_prev = link[0] + 1, link[1]
             if seq != want_seq:
-                problems.append(Problem(n, Kind.SEQ_MISMATCH, f"seq is {obj.get('seq')!r}, expected {want_seq}"))
+                problems.append(Problem(n, Kind.SEQ_MISMATCH, f"seq is {show(obj.get('seq'))}, expected {want_seq}"))
             if prev != want_prev:
                 where = "the genesis link" if want_prev.startswith(GENESIS_PREFIX) else f"line {n - 1}'s hash"
-                problems.append(Problem(n, Kind.PREV_MISMATCH, f"prev {_short(prev)} does not match {where} {_short(want_prev)}"))
+                problems.append(Problem(n, Kind.PREV_MISMATCH, f"prev {show(prev)} does not match {where} {show(want_prev)}"))
         if obj.get("run_id") != run_id:
-            problems.append(Problem(n, Kind.RUN_ID_MISMATCH, f"run_id {_short(obj.get('run_id'))} is not this run ({run_id})"))
+            problems.append(Problem(n, Kind.RUN_ID_MISMATCH, f"run_id {show(obj.get('run_id'))} is not this run ({show(run_id)})"))
         try:
             entries.append(decode_entry(obj))
         except EntryError as e:
@@ -144,20 +149,19 @@ def verify_run(run_dir: Path) -> Report:
     Raises OSError when the folder or file can't be read for a reason other than a missing
     ledger; a missing ledger in a run folder is a failed check, not an I/O error.
     """
-    run_id = run_dir.name
+    run_id = Path(os.path.abspath(run_dir)).name  # so "." works; symlinked folders keep their link name
     if not run_dir.is_dir():
         raise NotADirectoryError(f"{run_dir} is not a directory")
     if not RUN_ID_RE.fullmatch(run_id):
-        return Broken(run_id, (Problem(0, Kind.BAD_RUN_FOLDER, f"folder name {run_id!r} is not a run id (<yyyy-mm-dd>-<slug>)"),), 0)
+        return Broken(run_id, (Problem(0, Kind.BAD_RUN_FOLDER, f"folder name {show(run_id)} is not a run id (<yyyy-mm-dd>-<slug>)"),), 0)
     path = run_dir / LEDGER_FILE
     try:
-        data = path.read_bytes()
+        mode = path.lstat().st_mode
     except FileNotFoundError:
         return Broken(run_id, (Problem(0, Kind.MISSING_LEDGER, f"{LEDGER_FILE} not found"),), 0)
-    return verify_bytes(run_id, data)
+    if not stat.S_ISREG(mode):
+        # A ledger under review may come from an untrusted PR: a symlink could point the check
+        # at another file, and a pipe or device could hang it.
+        return Broken(run_id, (Problem(0, Kind.NOT_A_FILE, f"{LEDGER_FILE} is not a regular file"),), 0)
+    return verify_bytes(run_id, path.read_bytes())
 
-
-def _short(value: Any) -> str:
-    if isinstance(value, str) and len(value) > 20:
-        return value[:16] + "..."
-    return repr(value) if not isinstance(value, str) else value

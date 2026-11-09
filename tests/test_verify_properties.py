@@ -145,6 +145,18 @@ class FramingTest(unittest.TestCase):
     def test_byte_order_mark(self):
         self.assertIn((1, Kind.BAD_FRAMING), self.kinds(b"\xef\xbb\xbf" + b"".join(self.lines)))
 
+    def test_deep_nesting_is_a_problem_not_a_crash(self):
+        deep = b'{"data":' + b"[" * 600 + b"]" * 600 + b"}\n"
+        self.assertEqual(self.kinds(self.lines[0] + deep), {(2, Kind.BAD_JSON)})
+
+    def test_messages_escape_and_bound_what_they_quote(self):
+        hostile = resign(self.lines[1], prev="\x1b]0;pwned\x07" + "A" * 10_000)
+        report = verify_bytes(RUN_ID, self.lines[0] + hostile + self.lines[2])
+        self.assertIsInstance(report, Broken)
+        for p in report.problems:
+            self.assertTrue(p.message.isascii() and p.message.isprintable(), repr(p.message))
+            self.assertLess(len(p.message), 200)
+
     def test_problem_list_is_capped(self):
         report = verify_bytes(RUN_ID, b"x\n" * 200)
         self.assertIsInstance(report, Broken)

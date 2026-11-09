@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal, Mapping, Sequence, Union
 
-from ._canon import CanonError, JsonValue, canonical_bytes, freeze
+from ._canon import MAX_SAFE_INT, CanonError, JsonValue, canonical_bytes, freeze, show
 
 FORMAT_VERSION: Literal[1] = 1
 GENESIS_PREFIX = "genesis:"
@@ -121,6 +121,15 @@ def _actor_from_wire(obj: Any) -> Actor:
     raise EntryError("schema", 'actor.kind must be "agent" or "human"')
 
 
+def _check_run_id(run_id: Any) -> None:
+    _schema(isinstance(run_id, str) and RUN_ID_RE.fullmatch(run_id) is not None,
+            f"run id {show(run_id)} must be <yyyy-mm-dd>-<slug>")
+    try:
+        datetime.strptime(run_id[:10], "%Y-%m-%d")
+    except ValueError:
+        raise EntryError("schema", f"run id {show(run_id)} does not start with a real date") from None
+
+
 @dataclass(frozen=True)
 class ChainHead:
     """The tip of one run's chain: what the next entry links to.
@@ -135,15 +144,15 @@ class ChainHead:
 
     @classmethod
     def genesis(cls, run_id: str) -> "ChainHead":
-        _schema(isinstance(run_id, str) and RUN_ID_RE.fullmatch(run_id) is not None,
-                f"run id {run_id!r} must be <yyyy-mm-dd>-<slug>")
+        _check_run_id(run_id)
         return cls(run_id, 0, GENESIS_PREFIX + run_id)
 
 
 @dataclass(frozen=True)
 class Entry:
     """One ledger line. An Entry that exists is valid v1 AND its hash matches its content:
-    __post_init__ checks both, so a stale or forged hash can't be held in this type."""
+    __post_init__ checks both and deep-freezes `data`, so a stale or forged hash can't be held
+    in this type, however it was built."""
 
     seq: int
     ts: str
@@ -160,15 +169,14 @@ class Entry:
 
     def __post_init__(self) -> None:
         _schema(self.v == FORMAT_VERSION and type(self.v) is int, "v must be 1")
-        _schema(type(self.seq) is int and self.seq >= 1, "seq must be an integer >= 1")
+        _schema(type(self.seq) is int and 1 <= self.seq <= MAX_SAFE_INT, "seq must be an integer from 1 to 2**53-1")
         _schema(isinstance(self.ts, str) and TS_RE.fullmatch(self.ts) is not None,
                 "ts must be UTC to the second, like 2026-11-08T19:51:55Z")
         try:
             datetime.strptime(self.ts, TS_FORMAT)
         except ValueError:
-            raise EntryError("schema", f"ts {self.ts!r} is not a real calendar time") from None
-        _schema(isinstance(self.run_id, str) and RUN_ID_RE.fullmatch(self.run_id) is not None,
-                "run_id must be <yyyy-mm-dd>-<slug>")
+            raise EntryError("schema", f"ts {show(self.ts)} is not a real calendar time") from None
+        _check_run_id(self.run_id)
         _schema(isinstance(self.actor, (AgentActor, HumanActor)), "actor must be an agent or a human")
         _schema(isinstance(self.type, EntryType), "type must be one of " +
                 ", ".join(t.value for t in EntryType))
@@ -184,6 +192,7 @@ class Entry:
             canonical_bytes(self.data)
         except CanonError as e:
             raise EntryError("schema", f"data: {e}") from None
+        object.__setattr__(self, "data", freeze(self.data))
         if self.seq == 1:
             _schema(self.prev == GENESIS_PREFIX + self.run_id, f'seq 1 must have prev "genesis:{self.run_id}"')
         else:
@@ -247,15 +256,18 @@ def next_entry(
     """
     if isinstance(evidence, str):
         raise TypeError("evidence must be a sequence of strings, not one string")
+    _schema(isinstance(head.seq, int) and not isinstance(head.seq, bool) and 0 <= head.seq < MAX_SAFE_INT, "the chain is full: seq would pass 2**53-1")
+    _schema(isinstance(actor, (AgentActor, HumanActor)), "actor must be an AgentActor or HumanActor")
+    _schema(isinstance(type, EntryType), "type must be an EntryType")
+    try:
+        canonical_bytes(data or {})
+    except CanonError as e:
+        raise EntryError("schema", f"data: {e}") from None
     seq, ts, prev = head.seq + 1, format_ts(now), head.link
     evidence, frozen = tuple(evidence), freeze(dict(data or {}))
-    try:
-        preimage = _wire(FORMAT_VERSION, seq, ts, head.run_id, actor, type, summary, why,
-                         evidence, frozen, prev)
-        digest = _sha256(preimage)
-    except (CanonError, AttributeError):
-        # Bad input; let Entry's checks name the field instead of a generic error.
-        digest = "0" * 64
+    _schema(all(isinstance(item, str) for item in evidence), "evidence must be strings")
+    digest = _sha256(_wire(FORMAT_VERSION, seq, ts, head.run_id, actor, type, summary, why,
+                           evidence, frozen, prev))
     return Entry(seq=seq, ts=ts, run_id=head.run_id, actor=actor, type=type, summary=summary,
                  why=why, evidence=evidence, data=frozen, prev=prev, hash=digest)
 
@@ -272,16 +284,20 @@ def decode_entry(obj: Mapping[str, Any]) -> Entry:
     deep-frozen, so it never shares mutable state with `obj`.
     """
     _schema(isinstance(obj, Mapping), "an entry must be a JSON object")
+    try:
+        canonical_bytes(obj)
+    except CanonError as e:
+        raise EntryError("schema", str(e)) from None
     obj = freeze(obj)  # type: ignore[assignment]
     if obj.get("v") != FORMAT_VERSION or type(obj.get("v")) is not int:
-        raise EntryError("unsupported-version", f"v is {obj.get('v')!r}; this ledger reads v{FORMAT_VERSION}")
+        raise EntryError("unsupported-version", f"v is {show(obj.get('v'))}; this ledger reads v{FORMAT_VERSION}")
     missing, extra = ENTRY_KEYS - set(obj), set(obj) - ENTRY_KEYS
     _schema(not missing, f"missing keys: {', '.join(sorted(missing))}")
-    _schema(not extra, f"unknown keys: {', '.join(sorted(extra))}")
+    _schema(not extra, f"unknown keys: {show(sorted(extra))}")
     try:
         entry_type = EntryType(obj["type"])
     except ValueError:
-        raise EntryError("schema", f"unknown type {obj['type']!r}") from None
+        raise EntryError("schema", f"unknown type {show(obj['type'])}") from None
     evidence = obj["evidence"]
     _schema(isinstance(evidence, tuple), "evidence must be a list of strings")
     return Entry(

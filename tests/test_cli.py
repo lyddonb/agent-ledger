@@ -76,6 +76,23 @@ class VerifyCommandTest(unittest.TestCase):
         self.assertIn(f"{self.run_dir / 'ledger.jsonl'}:3: non-canonical:", out)
         self.assertIn("FAILED", out)
 
+    def test_dot_works_from_inside_the_run_folder(self):
+        import os
+        self.write(self.lines)
+        cwd = os.getcwd()
+        os.chdir(self.run_dir)
+        self.addCleanup(os.chdir, cwd)
+        code, out, _ = run_cli("verify", ".")
+        self.assertEqual(code, 0, out)
+
+    def test_symlinked_ledger_is_refused(self):
+        real = self.run_dir.parent / "elsewhere.jsonl"
+        real.write_bytes(b"".join(self.lines))
+        (self.run_dir / "ledger.jsonl").symlink_to(real)
+        code, out, _ = run_cli("verify", self.run_dir)
+        self.assertEqual(code, 1)
+        self.assertIn("not-a-file", out)
+
     def test_missing_ledger_is_a_failed_check(self):
         code, out, _ = run_cli("verify", self.run_dir)
         self.assertEqual(code, 1)

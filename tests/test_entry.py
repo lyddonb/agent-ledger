@@ -92,6 +92,46 @@ class EntryModelTest(unittest.TestCase):
             e.data["a"] = 1  # type: ignore[index]
         self.assertIsInstance(e.data["a"], tuple)
 
+    def test_an_entry_built_directly_does_not_share_the_callers_data(self):
+        e = make(data={"k": [1]})
+        mine = {"k": [1]}
+        built = replace(e, data=mine)
+        mine["k"].append(2)
+        self.assertEqual(decode_line(encode_line(built)), e)
+
+    def test_deep_data_is_a_schema_error(self):
+        deep: list = []
+        for _ in range(600):
+            deep = [deep]
+        self.assertSchema(lambda: make(data={"d": deep}))
+
+    def test_seq_stays_in_safe_integer_range(self):
+        head = ChainHead(RUN_ID, 2**53 - 1, "0" * 64)
+        self.assertSchema(lambda: next_entry(head, now=NOW, actor=AGENT, type=EntryType.STATE,
+                                             summary="s", why="w"))
+
+    def test_rules_the_spec_states(self):
+        cases = {
+            "actor field with a tab": lambda: HumanActor("a\tb", "lyddonb@github"),
+            "C1 control (NEL) in summary": lambda: make(summary="a\x85b"),
+            "DEL in why": lambda: make(why="a\x7fb"),
+            "paragraph separator": lambda: make(summary="a b"),
+            "run id with an impossible date": lambda: ChainHead.genesis("2026-99-99-x"),
+            "run id with a trailing hyphen": lambda: ChainHead.genesis("2026-10-18-m0-"),
+            "actor that isn't an Actor": lambda: make(actor={"kind": "human"}),
+            "type that isn't an EntryType": lambda: make(type="decision"),
+        }
+        for name, fn in cases.items():
+            with self.subTest(name):
+                self.assertSchema(fn)
+
+    def test_leap_second_is_not_a_valid_ts(self):
+        obj = json.loads(encode_line(make()))
+        obj["ts"] = "2016-12-31T23:59:60Z"
+        with self.assertRaises(EntryError) as cm:
+            decode_entry(obj)
+        self.assertEqual(cm.exception.kind, "schema")
+
 
 class DecodeTest(unittest.TestCase):
     """decode_entry is the parse boundary: each wire problem has one kind."""
