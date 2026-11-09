@@ -94,3 +94,16 @@ Units 1 and 2 build the ledger, so this run can't be recorded in it as it happen
 | why | Float canonicalization differs across languages and would break cross-language verification. Per AGENTS.md the spec conflict is raised, not silently resolved |
 | evidence | `docs/specs/S3-audit-ledger.md` "Open (spend amounts)" |
 | data | `{needs: human-decision, before: public-api-gate}` |
+
+## 8. review
+
+| Field | Value |
+|---|---|
+| ts | 2026-11-09T03:17:50Z |
+| run_id | 2026-10-18-m0-foundation |
+| actor | `{kind: agent, id: claude@claude-code#883d, on_behalf_of: lyddonb@github, tool: claude-code, model: opus, session: 883d1e36}` |
+| type | review |
+| summary | Interrogate (correctness, security, maintainer) on opus and sonnet found a nesting-depth crash, terminal escapes in messages, and mutable Entry data; all fixed |
+| why | The charter requires interrogate on every PR. Both models independently found the depth crash, the mutable data and `verify .`; each fix has a regression test and a mutant that the suite catches |
+| evidence | Commit "fix(ledger): harden verify against hostile ledgers"; S3 "Format v1" now sets a 32-level nesting limit |
+| data | `{reviewers: [opus, sonnet], cross_family: not-run, act_on: 5, fixed: 5, not_fixed: [deletion-after-unreadable-line is documented, not reported]}` |
