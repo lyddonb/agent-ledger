@@ -78,21 +78,23 @@ A chain on its own can't detect entries cut from the end, a suffix rewritten wit
 
 | Command | Does |
 |---|---|
-| `ledger init <slug>` | Creates the run folder and the genesis entry |
-| `ledger append --type T --summary S --why W --evidence E` | Redacts, chains and writes one entry through each configured sink |
+| `ledger init <slug> --actor A [--date D] [--why W]` | Creates the run folder (or uses an existing one) and the first entry, a `state` entry with `data` `{"state": "started"}`, chained to `genesis:<run-id>`. The run id is `<date>-<slug>`; the date defaults to today. Refuses a run that already has a ledger (built in M0 unit 2) |
+| `ledger append --run R --actor A --type T --summary S --why W [--evidence E]... [--data JSON]` | Redacts (from M0 unit 3), chains and writes one entry through each configured sink. Refuses a run whose ledger fails verify: exit 1 with the problems, as `verify` prints them (built in M0 unit 2) |
 | `ledger verify [--base origin/main]` | Checks every chain, that existing lines are unchanged relative to the base, and that each seal names a commit in history |
 | `ledger verify RUN_FOLDER` | Checks one run's chain (built in M0 unit 1). Exit 0 verified, 1 failed, 2 usage or read error |
-| `ledger show <run-id>` | Prints a readable table, newest last |
+| `ledger show <run-id>` | Prints a readable table, newest last, after verifying the run; a run that fails verify prints the problems instead and exits 1 (built in M0 unit 2) |
 | `ledger session add <file>` | Redacts, compresses and stores a transcript, then appends a `session` entry with both hashes |
 | `ledger seal <run-id>` | Writes the `seal` entry (final hash and head commit) and appends it to `INDEX.jsonl` |
 | `ledger charter ...` | Charter commands from S1 |
 | `ledger import-tsv <file>` | Converts an old `decisions.tsv` trail into a run |
 
-Parallel subagents append through the orchestrating agent, or take a file lock, so a chain never forks.
+`--actor` is the S2 actor as JSON. It is required on every write: the CLI never guesses who is acting, so a subagent can't inherit its parent's identity by accident. The run folder is `.audit/runs/<run-id>` under `--root`, which defaults to the nearest folder holding `.git`.
+
+Parallel subagents append through the orchestrating agent, or take a file lock, so a chain never forks. The repo sink takes the lock itself: `write` holds `flock` on `ledger.jsonl` (exclusive to write, shared to read), re-verifies the file, and accepts an entry only if its `seq` and `prev` extend the current head. `append` re-reads the head and re-chains when it loses that race. So any writer, CLI or library, gets one chain. The lock needs `fcntl` (Linux, macOS); a crashed write leaves a torn last line, which verify reports and every later append refuses until a person repairs it.
 
 ## Sinks
 
-Every write goes through a sink interface with two calls, `write(entry)` and `seal(run_id, hash, commit)`. M0 ships the `repo` sink. An `s3-object-lock` sink and an `external` ledger sink come in M4, configured in policy `audit.sinks`, with no change to any skill.
+Every write goes through a sink interface with two calls, `write(entry)` and `seal(run_id, hash, commit)` (`agent_ledger.sink.Sink`). M0 ships the `repo` sink, which is the chain's source of truth: other sinks mirror entries it has accepted. Its `seal` is built in M0 unit 4. An `s3-object-lock` sink and an `external` ledger sink come in M4, configured in policy `audit.sinks`, with no change to any skill.
 
 ## Session archive
 
@@ -109,11 +111,13 @@ This repo ships a GitHub Action, `ledger-verify`, that runs `ledger verify --bas
 
 Existing `decisions.tsv` trails stay readable. `ledger import-tsv` converts one into a run, marked as imported, with chaining starting at import.
 
+An imported entry is marked by `data.imported`, an object with `source` (where the record was, such as `bootstrap-notes.md#3`), `source_ts` (the time the record gives, in `ts` form) and `by` (the id of the actor who imported it). Its `ts` is when it was chained, never the earlier time, so `ts` always means "written to the ledger at". Its `actor` is the record's original actor, which `data.imported.by` qualifies: an imported human approval was typed in by the importer, not signed by the human. `ledger show` tags these entries `[imported]`. This is a convention inside `data`, not a format change.
+
 ## Acceptance criteria
 
 - [ ] Editing any past line of a ledger makes `ledger verify` fail and names the line.
 - [ ] Deleting a line or reordering two lines fails verification.
 - [ ] A planted fake secret in a transcript is redacted before it reaches git; the CI scan finds nothing.
-- [ ] Two subagents appending at once produce one valid chain.
+- [x] Two subagents appending at once produce one valid chain (`tests/test_sink.py` `ConcurrentAppendTest`, M0 unit 2).
 - [ ] A sealed run's `INDEX.jsonl` entry names a commit that exists on `main`.
 - [ ] Swapping the repo sink for a test sink needs only a policy change.

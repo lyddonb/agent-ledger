@@ -107,3 +107,7 @@ Units 1 and 2 build the ledger, so this run can't be recorded in it as it happen
 | why | The charter requires interrogate on every PR. Both models independently found the depth crash, the mutable data and `verify .`; each fix has a regression test and a mutant that the suite catches |
 | evidence | Commit "fix(ledger): harden verify against hostile ledgers"; S3 "Format v1" now sets a 32-level nesting limit |
 | data | `{reviewers: [opus, sonnet], cross_family: not-run, act_on: 5, fixed: 5, not_fixed: [deletion-after-unreadable-line is documented, not reported]}` |
+
+## Imported
+
+On 2026-11-09, M0 unit 2 imported entries 1 to 8 above into `ledger.jsonl` as seq 2 to 9, after a seq 1 `state` entry from `ledger init`. Each carries `data.imported` with its source section here, its original ts, and the importing agent's id (S3 "Migration"). Beau's human actor gained `on_behalf_of: lyddonb@github`, which S2 requires; everything else is transcribed as written, minus markdown backticks. This file is now closed: new records for this run go in with `ledger append`.
