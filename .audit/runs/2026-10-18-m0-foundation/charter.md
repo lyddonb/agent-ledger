@@ -81,11 +81,13 @@ One `judgment` agent designs the schema, hashing and verify (unit 1), because ev
 | | Estimate | Limit |
 |---|---|---|
 | Dollars | $35 | $60 |
-| Tokens | 6M | 10M |
+| Tokens (input, output, cache writes) | 6M | 10M |
 | Wall-clock | 6 h | 10 h |
 | Parallel agents | 3 | 3 |
 
 These are rough guesses: there is no recorded spend yet to calibrate from. Claude Code reports cost per session; the other tools may not, so the dollar limit is partly advisory.
+
+**Amended 2026-11-09:** dollars are the main measure. The token limit counts input, output and cache-write tokens, not cache reads, per S1 "Budget". Counting cache reads, M0 reached 44.6M tokens by the end of unit 2 at about $20, so a limit that counted them would have fired the `spend` gate on noise.
 
 ## SOC 2 gaps
 

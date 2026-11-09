@@ -52,6 +52,26 @@ def check_imported(data: Mapping[str, Any] | None) -> None:
         raise EntryError("schema", "data.imported.source_ts must be a real ts, like 2026-11-08T19:51:55Z")
 
 
+SPEND_COUNTS = ("usd_micros", "tokens", "cache_read_tokens", "wall_s")
+
+
+def check_spend(entry_type: EntryType, data: Mapping[str, Any] | None) -> None:
+    """S3 "Spend entries": usd_micros is required; the counts are non-negative integers and
+    estimate is a boolean. Other keys are allowed."""
+    if entry_type is not EntryType.SPEND:
+        return
+    data = data or {}
+    if "usd_micros" not in data:
+        raise EntryError("schema", "a spend entry needs data.usd_micros (dollars in millionths: $4.25 is 4250000)")
+    for key in SPEND_COUNTS:
+        value = data.get(key, 0)
+        if type(value) is not int or value < 0:  # bool is an int subclass; refuse it
+            raise EntryError("schema", f"data.{key} must be a non-negative integer")
+    if "estimate" in data and type(data["estimate"]) is not bool:
+        raise EntryError("schema", "data.estimate must be true or false")
+
+
+
 def run_id_for(slug: str, day: date) -> str:
     return f"{day.isoformat()}-{slug}"
 
@@ -82,6 +102,7 @@ def append(
     and re-chains (with a fresh timestamp) instead of forking the chain.
     """
     check_imported(data)
+    check_spend(type, data)
     for _ in range(APPEND_ATTEMPTS):
         entry = next_entry(sink.head(run_id), now=clock(), actor=actor, type=type,
                            summary=summary, why=why, evidence=evidence, data=data)

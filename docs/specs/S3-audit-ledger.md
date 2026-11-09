@@ -32,7 +32,7 @@ One JSON object per line:
 | `summary` | One line: what happened |
 | `why` | One line: the reason |
 | `evidence` | Pointers: commit SHAs, PR numbers, file paths with line, artifact hashes. Never pasted content |
-| `data` | Type-specific fields, such as `{usd, tokens, wall_s}` for `spend` or `{verdict}` for `verification` |
+| `data` | Type-specific fields, such as `{usd_micros, tokens, wall_s}` for `spend` (see Spend entries) or `{verdict}` for `verification` |
 | `prev` | The previous entry's hash, or `genesis:<run-id>` for the first |
 | `hash` | SHA-256 of this entry's canonical JSON (sorted keys, no spaces) without `hash` |
 
@@ -45,7 +45,19 @@ Every field is always present, and no other keys are allowed. The v1 rules, exac
 - `evidence` is a list of text strings and may be empty. `data` is an object and may be empty.
 - `actor`: an agent has exactly `kind` (`"agent"`), `id`, `on_behalf_of`, `tool`, `model` and `session`; a human has exactly `kind` (`"human"`), `id` and `on_behalf_of`. `approval` and `gate-answer` entries have a human actor (S2).
 
-> **Open (spend amounts):** format v1 has no floating-point numbers (see below), so `spend` can't carry `usd: 4.25`. The proposal is integer `usd_micros`. Decide before v1 is frozen at the `public-api` gate.
+### Spend entries
+
+Format v1 has no floating-point numbers, so dollars are integer millionths: `usd_micros: 4250000` is $4.25. Micros keep one input token on the cheapest model above zero, and 2^53 micros is about $9 billion. A `spend` entry's `data` has:
+
+| Key | Required | Meaning |
+|---|---|---|
+| `usd_micros` | yes | Dollars spent, in millionths |
+| `tokens` | no | Input, output and cache-write tokens. Cache reads are not counted (S1 "Budget") |
+| `cache_read_tokens` | no | Cache-read tokens, reported separately |
+| `wall_s` | no | Wall-clock seconds |
+| `estimate` | no | `true` when the figures are estimated, not billed |
+
+Each is a non-negative integer except `estimate`, a boolean. Other keys are allowed. `ledger append` refuses a `spend` entry that breaks these rules; `verify` doesn't check them, because they are a convention inside `data`, not part of format v1. Decided by Beau on 2026-11-09 (the M0 run's ledger records it as a `gate-answer`).
 
 ### Format v1: canonical form
 
