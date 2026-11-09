@@ -6,7 +6,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 |---|---|---|
 | H1 | Confirm the name `agent-ledger` (CLI `ledger`) | To do |
 | H2 | Create the GitHub repo and push | Done (private for now; see below) |
-| H3 | Turn on Actions and protect `main` (no force-push) | To do; required before the gate run |
+| H3 | Turn on Actions and protect `main` (no force-push) | Done 2026-11-08: Actions on; main requires a PR and the three test checks, admins included, no force-push or deletion. |
 | H4 | Approve the M0 charter | Done 2026-11-08 |
 | H5 | Pick the project for the M0 gate run | Needed by M0 unit 9 |
 
@@ -22,7 +22,7 @@ gh repo create lyddonb/agent-ledger --public --source . --push
 ```
 Public and generic, like agent-kit and agentfiles. Nothing employer-specific goes here.
 
-### H3. Actions and branch protection
+### H3. Actions and branch protection — Done
 Enable Actions, then protect `main`: require the `test` check, require a PR, and block force-pushes. Blocking force-pushes is what makes merged history the project-level chain (spec S3).
 
 ### H4. Approve the M0 charter — Done 2026-11-08

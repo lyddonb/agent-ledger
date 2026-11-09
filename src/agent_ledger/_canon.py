@@ -154,3 +154,22 @@ def parse_canonical(body: bytes) -> Mapping[str, JsonValue]:
     if canonical_bytes(value) != body:
         raise CanonError("non-canonical", "bytes differ from the canonical encoding of the same value")
     return freeze(value)  # type: ignore[return-value]
+
+
+def parse_value(text: str) -> JsonValue:
+    """Parse ledger JSON typed by a person (CLI flags), in any spacing or key order.
+
+    Same value rules as a ledger line (no floats, no duplicate keys, ledger keys), but no
+    canonical-bytes check: the writer canonicalizes it. Returns the value deep-frozen.
+    """
+    if _nesting(text) > MAX_DEPTH:
+        raise CanonError("bad-json", f"nested deeper than {MAX_DEPTH}")
+    try:
+        value = json.loads(text, object_pairs_hook=_pairs, parse_float=_reject_float,
+                           parse_constant=_reject_constant)
+    except CanonError:
+        raise
+    except ValueError as e:
+        raise CanonError("bad-json", f"not JSON: {e}") from None
+    canonical_bytes(value)
+    return freeze(value)
