@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from .entry import Actor, ChainHead, Entry, EntryType, next_entry
+from .entry import TS_RE, Actor, ChainHead, Entry, EntryError, EntryType, next_entry
 from .sink import LedgerError, RepoSink, StaleHead
 
 AUDIT_DIR = ".audit"
@@ -24,16 +24,28 @@ def utc_now() -> datetime:
 
 def find_root(start: Path) -> Path:
     """The repo root: the nearest folder at or above `start` holding `.git` (a folder, or a file
-    in a worktree). `start` itself when there is none."""
+    in a worktree). Outside a repo there is no sensible default, so that is an error."""
     start = start.resolve()
     for folder in (start, *start.parents):
         if (folder / ".git").exists():
             return folder
-    return start
+    raise LedgerError(f"no .git folder at or above {start}; run inside a repo or pass --root")
 
 
 def repo_sink(root: Path) -> RepoSink:
     return RepoSink(root / AUDIT_DIR / RUNS_DIR)
+
+
+def check_imported(data: Mapping[str, Any] | None) -> None:
+    """S3 "Migration": data.imported, when present, is {source, source_ts, by}, all text."""
+    if not data or IMPORTED_KEY not in data:
+        return
+    marker = data[IMPORTED_KEY]
+    if not isinstance(marker, Mapping) or set(marker) != {"source", "source_ts", "by"} or not all(
+            isinstance(v, str) and v for v in marker.values()):
+        raise EntryError("schema", 'data.imported must be {"source", "source_ts", "by"}, each a non-empty string')
+    if not TS_RE.fullmatch(marker["source_ts"]):
+        raise EntryError("schema", "data.imported.source_ts must be a ts, like 2026-11-08T19:51:55Z")
 
 
 def run_id_for(slug: str, day: date) -> str:
@@ -65,6 +77,7 @@ def append(
     The sink rejects an entry chained to a stale head, so on a race this re-reads the head
     and re-chains (with a fresh timestamp) instead of forking the chain.
     """
+    check_imported(data)
     for _ in range(APPEND_ATTEMPTS):
         entry = next_entry(sink.head(run_id), now=clock(), actor=actor, type=type,
                            summary=summary, why=why, evidence=evidence, data=data)

@@ -15,7 +15,7 @@ from typing import Callable, Mapping
 from . import __version__
 from ._canon import CanonError, parse_value
 from .entry import Actor, EntryError, EntryType, _actor_from_wire
-from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for
+from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, utc_now
 from .sink import ChainBroken, LedgerError
 from .verify import Broken, Verified, verify_run
 
@@ -126,7 +126,7 @@ def _guard(name: str, ns: argparse.Namespace, body: Callable[[], int]) -> int:
 
 def _add_init_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("slug", help="the run's slug; the run id is <date>-<slug>")
-    p.add_argument("--date", type=_day, default=None, help="the run id's date (default: today)")
+    p.add_argument("--date", type=_day, default=None, help="the run id's date (default: today in UTC, matching ts)")
     p.add_argument("--actor", type=_actor, required=True, help=ACTOR_HELP)
     p.add_argument("--why", default="Run started with `ledger init`", help="one line: why the run exists")
     _add_root_arg(p)
@@ -135,7 +135,7 @@ def _add_init_args(p: argparse.ArgumentParser) -> None:
 def _init(ns: argparse.Namespace) -> int:
     def body() -> int:
         sink = _sink(ns)
-        run_id = run_id_for(ns.slug, ns.date or date.today())
+        run_id = run_id_for(ns.slug, ns.date or utc_now().date())
         entry = init_run(sink, run_id, actor=ns.actor, why=ns.why)
         print(f"started {run_id}: {sink.run_dir(run_id) / 'ledger.jsonl'} seq {entry.seq} {entry.hash}")
         return EXIT_OK
@@ -163,6 +163,16 @@ def _append(ns: argparse.Namespace) -> int:
     return _guard("append", ns, body)
 
 
+def _visible(text: str) -> str:
+    """Text as a reader should see it: format characters (bidi overrides, zero-width marks)
+    and other invisibles are written as \\uXXXX, so one row can't impersonate another."""
+    return "".join(ch if ch == " " or ch.isprintable() else f"\\u{ord(ch):04x}" for ch in text)
+
+
+def _actor_label(actor: Actor) -> str:
+    return actor.to_wire()["kind"] + ":" + actor.id
+
+
 def _add_show_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("run_id", metavar="RUN_ID", help="the run to print")
     _add_root_arg(p)
@@ -171,8 +181,9 @@ def _add_show_args(p: argparse.ArgumentParser) -> None:
 def _show(ns: argparse.Namespace) -> int:
     def body() -> int:
         report = _sink(ns).read(ns.run_id)
-        rows = [(str(e.seq), e.ts, e.type.value, e.actor.id,
-                 ("[imported] " if IMPORTED_KEY in e.data else "") + e.summary, e.why)
+        rows = [(str(e.seq), e.ts, e.type.value, _visible(_actor_label(e.actor)),
+                 ("[imported] " if IMPORTED_KEY in e.data else "") + _visible(e.summary),
+                 _visible(e.why))
                 for e in report.entries]
         header = ("seq", "ts", "type", "actor", "summary")
         widths = [max(len(r[i]) for r in [header, *rows]) for i in range(4)]

@@ -90,7 +90,11 @@ A chain on its own can't detect entries cut from the end, a suffix rewritten wit
 
 `--actor` is the S2 actor as JSON. It is required on every write: the CLI never guesses who is acting, so a subagent can't inherit its parent's identity by accident. The run folder is `.audit/runs/<run-id>` under `--root`, which defaults to the nearest folder holding `.git`.
 
-Parallel subagents append through the orchestrating agent, or take a file lock, so a chain never forks. The repo sink takes the lock itself: `write` holds `flock` on `ledger.jsonl` (exclusive to write, shared to read), re-verifies the file, and accepts an entry only if its `seq` and `prev` extend the current head. `append` re-reads the head and re-chains when it loses that race. So any writer, CLI or library, gets one chain. The lock needs `fcntl` (Linux, macOS); a crashed write leaves a torn last line, which verify reports and every later append refuses until a person repairs it.
+Parallel subagents append through the orchestrating agent, or take a file lock, so a chain never forks. The repo sink takes the lock itself: `write` holds `flock` on `ledger.jsonl` (exclusive to write, shared to read), re-verifies the file, and accepts an entry only if its `seq` and `prev` extend the current head. `append` re-reads the head and re-chains when it loses that race. So any writer, CLI or library, gets one chain. After taking the lock, `write` checks that the file it locked is still the one at `ledger.jsonl` (a `git checkout` replaces the file by rename) and retries if not. A write that fails partway is truncated back under the lock. The lock needs `fcntl` (Linux, macOS), so `append` and `show` do too; `init` and `verify` don't. A process killed mid-write still leaves a torn last line, which verify reports and every later append refuses until a person repairs it. `ledger verify` reads without the lock, so run it when no one is appending.
+
+The writer refuses a symlink at `.audit`, `.audit/runs` or the run folder, as verify refuses one at `ledger.jsonl`. Outside a git repo, `--root` is required.
+
+The CLI does not authenticate `--actor`: anyone who can run `ledger append` can write an entry naming any actor, including a human approval. In M0 the protection is review of the PR that adds the line; signing is not in M0. `ledger show` prints each actor as `kind:id` and escapes invisible and bidi characters, so one actor can't pass for another on screen.
 
 ## Sinks
 

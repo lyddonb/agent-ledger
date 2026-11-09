@@ -7,6 +7,7 @@ Later sinks (M4) mirror entries after the repo sink has accepted them.
 """
 from __future__ import annotations
 
+import errno
 import os
 import stat
 import tempfile
@@ -61,32 +62,44 @@ def _locked(path: Path, run_id: str, *, exclusive: bool) -> Iterator[int]:
 
     The lock is on ledger.jsonl itself, so there is no lock file to leave behind or commit.
     flock locks belong to the open file, so threads and processes exclude each other alike.
+    A lock on a file that was since replaced by rename (git checkout does this) guards
+    nothing, so after locking, the open file must still be the one at `path`; if not, retry.
     """
     try:
         import fcntl
     except ImportError:
-        raise LedgerError("appending needs file locks (fcntl), which this platform lacks") from None
-    try:
-        mode = path.lstat().st_mode
-    except FileNotFoundError:
-        raise NoSuchRun(f"{run_id} has no {LEDGER_FILE}; start it with `ledger init`") from None
-    if not stat.S_ISREG(mode):  # checked before open: opening a FIFO would block
-        raise _broken(run_id, Kind.NOT_A_FILE, f"{LEDGER_FILE} is not a regular file")
+        raise LedgerError("the ledger lock needs fcntl (Linux or macOS), which this platform lacks") from None
     flags = (os.O_RDWR | os.O_APPEND) if exclusive else os.O_RDONLY
     flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-    try:
-        fd = os.open(path, flags)
-    except FileNotFoundError:
-        raise NoSuchRun(f"{run_id} has no {LEDGER_FILE}; start it with `ledger init`") from None
-    except OSError as e:  # ELOOP: swapped for a symlink after the lstat
-        raise _broken(run_id, Kind.NOT_A_FILE, f"{LEDGER_FILE} can't be opened safely: {e.strerror}") from None
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+    while True:
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            raise NoSuchRun(f"{run_id} has no {LEDGER_FILE}; start it with `ledger init`") from None
+        if not stat.S_ISREG(mode):  # checked before open: opening a FIFO would block
             raise _broken(run_id, Kind.NOT_A_FILE, f"{LEDGER_FILE} is not a regular file")
-        fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-        yield fd
-    finally:
-        os.close(fd)  # releases the lock
+        try:
+            fd = os.open(path, flags)
+        except FileNotFoundError:
+            continue  # removed between lstat and open; look again
+        except OSError as e:
+            if e.errno == errno.ELOOP:  # swapped for a symlink after the lstat
+                raise _broken(run_id, Kind.NOT_A_FILE, f"{LEDGER_FILE} is a symlink") from None
+            raise
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode):
+                raise _broken(run_id, Kind.NOT_A_FILE, f"{LEDGER_FILE} is not a regular file")
+            fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+            try:
+                now = path.lstat()
+            except FileNotFoundError:
+                now = None
+            if now is not None and (now.st_dev, now.st_ino) == (st.st_dev, st.st_ino):
+                yield fd
+                return
+        finally:
+            os.close(fd)  # releases the lock
 
 
 def _read_all(fd: int) -> bytes:
@@ -120,14 +133,24 @@ class RepoSink:
         _check_run_id(run_id)  # also keeps "../x" and "/" out of the path
         return self.runs_dir / run_id
 
+    def _ledger(self, run_id: str) -> Path:
+        """The run's ledger path, refusing a symlink anywhere from .audit down, so a hostile
+        checkout can't point a write or a read outside the repo."""
+        run_dir = self.run_dir(run_id)
+        for folder in (self.runs_dir.parent, self.runs_dir, run_dir):
+            if folder.is_symlink():
+                raise LedgerError(f"{folder} is a symlink; the ledger only writes through real folders")
+        return run_dir / LEDGER_FILE
+
     def create(self, first: Entry) -> None:
         """Start a run's ledger with its first entry. The run folder may exist (a charter is
         often written first); the ledger may not. Atomic: the file appears whole or not at all."""
         if first.seq != 1:
             raise ValueError(f"a ledger starts at seq 1, not {first.seq}")
-        run_dir = self.run_dir(first.run_id)
-        run_dir.mkdir(parents=True, exist_ok=True)
-        path = run_dir / LEDGER_FILE
+        self._ledger(first.run_id)
+        self.run_dir(first.run_id).mkdir(parents=True, exist_ok=True)
+        path = self._ledger(first.run_id)  # again: mkdir may have made the folders just now
+        run_dir = path.parent
         fd, tmp = tempfile.mkstemp(dir=run_dir, prefix=f".{LEDGER_FILE}.", suffix=".tmp")
         try:
             os.fchmod(fd, 0o644)  # mkstemp makes 0600; a ledger is an ordinary repo file
@@ -148,7 +171,7 @@ class RepoSink:
     def read(self, run_id: str) -> Verified:
         """The run's verified entries, read under a shared lock so a write in progress is never
         seen half done. Raises ChainBroken when verify fails."""
-        with _locked(self.run_dir(run_id) / LEDGER_FILE, run_id, exclusive=False) as fd:
+        with _locked(self._ledger(run_id), run_id, exclusive=False) as fd:
             return _verified(run_id, _read_all(fd))
 
     def head(self, run_id: str) -> ChainHead:
@@ -157,12 +180,19 @@ class RepoSink:
     def write(self, entry: Entry) -> None:
         """Append `entry` iff it extends the current head; otherwise raise StaleHead."""
         run_id = entry.run_id
-        with _locked(self.run_dir(run_id) / LEDGER_FILE, run_id, exclusive=True) as fd:
-            head = _verified(run_id, _read_all(fd)).head
+        with _locked(self._ledger(run_id), run_id, exclusive=True) as fd:
+            data = _read_all(fd)
+            head = _verified(run_id, data).head
             if (entry.seq, entry.prev) != (head.seq + 1, head.link):
                 raise StaleHead(f"{run_id}: entry seq {entry.seq} was chained to "
                                 f"{show(entry.prev, 20)}, but the head is now seq {head.seq}")
-            _write_all(fd, encode_line(entry))
+            try:
+                _write_all(fd, encode_line(entry))
+            except BaseException:
+                os.ftruncate(fd, len(data))  # still under the lock: drop the torn part
+                raise
+            # The line is whole now. If fsync fails, the entry is written but maybe not durable;
+            # the caller sees an OSError and must check the ledger before writing it again.
             os.fsync(fd)
 
     def seal(self, run_id: str, hash: str, commit: str) -> None:

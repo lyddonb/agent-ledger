@@ -160,7 +160,7 @@ class WriteCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         lines = out.splitlines()
         self.assertEqual(lines[0].split(), ["seq", "ts", "type", "actor", "summary"])
-        self.assertEqual(lines[3].split()[:4], ["2", entries[1]["ts"], "decision", "claude@claude-code#a0f4"])
+        self.assertEqual(lines[3].split()[:4], ["2", entries[1]["ts"], "decision", "agent:claude@claude-code#a0f4"])
         self.assertTrue(lines[3].endswith("  Use flock"), lines[3])
         self.assertTrue(lines[4].strip() == "why: stdlib only", lines[4])
         self.assertIn(f"{DEMO}: 3 entries, verified", lines[-1])
@@ -179,10 +179,35 @@ class WriteCommandsTest(unittest.TestCase):
 
     def test_show_marks_imported_entries(self):
         self.init()
-        self.append("--type", "decision", "--summary", "Old call", "--why", "w",
-                    "--data", '{"imported": {"source": "notes.md#1"}}')
+        code, _, err = self.append("--type", "decision", "--summary", "Old call", "--why", "w", "--data",
+                                   '{"imported": {"source": "notes.md#1", "source_ts": "2026-11-09T02:51:37Z",'
+                                   ' "by": "claude@claude-code#a0f4"}}')
+        self.assertEqual(code, 0, err)
         _, out, _ = run_cli("show", DEMO, "--root", self.root)
         self.assertIn("[imported] Old call", out)
+
+    def test_show_labels_the_actor_kind_and_escapes_invisible_characters(self):
+        self.init()
+        code, _, err = run_cli("append", "--run", DEMO, "--root", self.root, "--type", "approval",
+                               "--actor", '{"kind": "human", "id": "lyddonb\u200b", "on_behalf_of": "x@github"}',
+                               "--summary", "Approved \u202edetrats", "--why", "w")
+        self.assertEqual(code, 0, err)
+        _, out, _ = run_cli("show", DEMO, "--root", self.root)
+        self.assertIn("agent:claude@claude-code#a0f4", out)
+        self.assertIn("human:lyddonb\\u200b", out)
+        self.assertIn("Approved \\u202edetrats", out)
+        self.assertNotIn("\u202e", out)
+        self.assertNotIn("\u200b", out)
+
+    def test_outside_a_repo_without_root_is_an_error(self):
+        import os
+        cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, cwd)
+        code, _, err = run_cli("init", "demo", "--actor", AGENT)
+        self.assertEqual(code, 2)
+        self.assertIn("--root", err)
+        self.assertFalse((self.root / ".audit").exists())
 
     def test_init_twice_is_refused(self):
         self.init()
