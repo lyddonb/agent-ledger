@@ -195,6 +195,19 @@ class WriteCommandsTest(unittest.TestCase):
         _, out, _ = run_cli("show", DEMO, "--root", self.root)
         self.assertIn("agent:claude@claude-code#a0f4", out)
         self.assertIn("human:lyddonb\\u200b", out)
+        code, _, err = run_cli("append", "--run", DEMO, "--root", self.root, "--type", "approval",
+                               "--actor", '{"kind": "human", "id": "lyddonb\u3164", "on_behalf_of": "x@github"}',
+                               "--summary", "Filler\ufe0e", "--why", "w")
+        self.assertEqual(code, 0, err)
+        _, out, _ = run_cli("show", DEMO, "--root", self.root)
+        self.assertIn("human:lyddonb\\u3164", out)
+        code, _, err = run_cli("append", "--run", DEMO, "--root", self.root, "--type", "approval",
+                               "--actor", '{"kind": "human", "id": "lydd\\u043enb", "on_behalf_of": "x@github"}',
+                               "--summary", "Cyrillic o", "--why", "w")
+        self.assertEqual(code, 0, err)
+        _, out, _ = run_cli("show", DEMO, "--root", self.root)
+        self.assertIn("human:lydd\\u043enb", out, "a look-alike login must not print as lyddonb")
+        self.assertIn("Filler\\ufe0e", out)
         self.assertIn("Approved \\u202edetrats", out)
         self.assertNotIn("\u202e", out)
         self.assertNotIn("\u200b", out)

@@ -4,7 +4,7 @@ A tamper-evident record of what AI agents did in your repo, and why.
 
 agent-ledger is the runtime behind **governed agent runs**. Before a large run starts, a person approves its charter (goal, gates, budget). As the run proceeds, agents write a hash-chained ledger of their decisions, gate answers, verification results and spend. Session transcripts are archived beside it, redacted. CI verifies every chain on every PR, so an auditor can reconstruct how any merged change was approved, built, tested and reviewed, without trusting the agent that wrote it.
 
-> **Status: M0 in progress.** `ledger verify RUN_FOLDER` checks one run's hash chain. Nothing writes entries yet: `init` and `append` come next, and the other commands are stubs. The entry format is unfrozen until v1 is tagged. See [the roadmap](ROADMAP.md) and the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md).
+> **Status: M0 in progress.** `ledger init`, `ledger append` and `ledger show` write and read a run's chain, and `ledger verify RUN_FOLDER` checks it. Redaction, sessions, seals and charter commands are stubs for now. The entry format is unfrozen until v1 is tagged. See [the roadmap](ROADMAP.md) and the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md).
 
 ## How it fits with agent-kit and agentfiles
 
@@ -21,9 +21,9 @@ Why a separate repo: the ledger format is a promise about records you keep for y
 Planned commands (specified in [S3](docs/specs/S3-audit-ledger.md) and [S1](docs/specs/S1-run-charter.md)):
 
 ```text
-ledger init <slug>                 start a run: folder + genesis entry
+ledger init <slug> --actor ...    start a run: folder + first entry
 ledger charter new|check|approve   write, validate and approve the run charter
-ledger append --type ... --summary ... --why ... --evidence ...
+ledger append --run ... --actor ... --type ... --summary ... --why ... [--evidence ...] [--data ...]
 ledger session add <transcript>    redact, compress, archive, hash into the chain
 ledger verify [--base origin/main] chains intact, ledgers only grew, seals point at real commits
 ledger show <run-id>               readable table of a run

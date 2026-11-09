@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import unicodedata
 from datetime import date
 from pathlib import Path
 from typing import Callable, Mapping
@@ -163,14 +164,26 @@ def _append(ns: argparse.Namespace) -> int:
     return _guard("append", ns, body)
 
 
+# Characters that print as nothing, or that change how neighbors print: format and combining
+# marks, unassigned and private-use code points, odd spaces, and the Hangul fillers (letters
+# by category, blank on screen).
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Mn", "Me", "Zs", "Zl", "Zp"})
+_FILLERS = frozenset("\u115f\u1160\u3164\uffa0")
+
+
 def _visible(text: str) -> str:
-    """Text as a reader should see it: format characters (bidi overrides, zero-width marks)
-    and other invisibles are written as \\uXXXX, so one row can't impersonate another."""
-    return "".join(ch if ch == " " or ch.isprintable() else f"\\u{ord(ch):04x}" for ch in text)
+    """Summary and why as a reader should see them: invisible and bidi-affecting characters are
+    written as \\uXXXX, so one row can't hide text or pass for another."""
+    return "".join(
+        f"\\u{ord(ch):04x}" if ch != " " and (unicodedata.category(ch) in _INVISIBLE_CATEGORIES
+                                             or ch in _FILLERS) else ch
+        for ch in text)
 
 
 def _actor_label(actor: Actor) -> str:
-    return actor.to_wire()["kind"] + ":" + actor.id
+    """kind:id with every non-ASCII character escaped. Ids are logins and agent names, so an id
+    that differs from another only in a look-alike or invisible character shows the difference."""
+    return actor.to_wire()["kind"] + ":" + ascii(actor.id)[1:-1]
 
 
 def _add_show_args(p: argparse.ArgumentParser) -> None:
@@ -181,7 +194,7 @@ def _add_show_args(p: argparse.ArgumentParser) -> None:
 def _show(ns: argparse.Namespace) -> int:
     def body() -> int:
         report = _sink(ns).read(ns.run_id)
-        rows = [(str(e.seq), e.ts, e.type.value, _visible(_actor_label(e.actor)),
+        rows = [(str(e.seq), e.ts, e.type.value, _actor_label(e.actor),
                  ("[imported] " if IMPORTED_KEY in e.data else "") + _visible(e.summary),
                  _visible(e.why))
                 for e in report.entries]

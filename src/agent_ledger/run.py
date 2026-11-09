@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from .entry import TS_RE, Actor, ChainHead, Entry, EntryError, EntryType, next_entry
+from .entry import TS_FORMAT, TS_RE, Actor, ChainHead, Entry, EntryError, EntryType, next_entry
 from .sink import LedgerError, RepoSink, StaleHead
 
 AUDIT_DIR = ".audit"
@@ -44,8 +44,12 @@ def check_imported(data: Mapping[str, Any] | None) -> None:
     if not isinstance(marker, Mapping) or set(marker) != {"source", "source_ts", "by"} or not all(
             isinstance(v, str) and v for v in marker.values()):
         raise EntryError("schema", 'data.imported must be {"source", "source_ts", "by"}, each a non-empty string')
-    if not TS_RE.fullmatch(marker["source_ts"]):
-        raise EntryError("schema", "data.imported.source_ts must be a ts, like 2026-11-08T19:51:55Z")
+    try:
+        format_ok = TS_RE.fullmatch(marker["source_ts"]) and datetime.strptime(marker["source_ts"], TS_FORMAT)
+    except ValueError:
+        format_ok = False
+    if not format_ok:
+        raise EntryError("schema", "data.imported.source_ts must be a real ts, like 2026-11-08T19:51:55Z")
 
 
 def run_id_for(slug: str, day: date) -> str:

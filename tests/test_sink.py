@@ -191,10 +191,28 @@ class RepoSinkTest(unittest.TestCase):
         good = {"source": "notes.md#1", "source_ts": "2026-11-09T02:51:37Z", "by": "claude@claude-code#a0f4"}
         append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="x", why="w",
                data={"imported": good})
-        for bad in (True, {"source": "x"}, {**good, "source_ts": "yesterday"}, {**good, "by": ""}):
+        for bad in (True, {"source": "x"}, {**good, "source_ts": "yesterday"},
+                    {**good, "source_ts": "2026-02-31T00:00:00Z"}, {**good, "by": ""}):
             with self.subTest(bad), self.assertRaises(EntryError):
                 append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="x", why="w",
                        data={"imported": bad})
+
+    def test_a_ledger_replaced_mid_write_is_reported_not_lost_silently(self):
+        from unittest import mock
+        from agent_ledger import sink as sink_mod
+        from agent_ledger.sink import LedgerError
+        first = self.start()
+        entry = next_entry(first.head, now=T0, actor=AGENT, type=EntryType.STATE, summary="late", why="w")
+        real = sink_mod._write_all
+
+        def write_then_checkout(fd, data):
+            real(fd, data)
+            copy = self.ledger.with_name("copy.jsonl")
+            copy.write_bytes(self.ledger.read_bytes()[: -len(data)])
+            os.replace(copy, self.ledger)
+        with mock.patch.object(sink_mod, "_write_all", write_then_checkout):
+            with self.assertRaisesRegex(LedgerError, "replaced during the write"):
+                self.sink.write(entry)
 
     def test_seal_is_an_honest_stub(self):
         with self.assertRaisesRegex(NotImplementedError, "unit 4"):

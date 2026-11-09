@@ -91,11 +91,7 @@ def _locked(path: Path, run_id: str, *, exclusive: bool) -> Iterator[int]:
             if not stat.S_ISREG(st.st_mode):
                 raise _broken(run_id, Kind.NOT_A_FILE, f"{LEDGER_FILE} is not a regular file")
             fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-            try:
-                now = path.lstat()
-            except FileNotFoundError:
-                now = None
-            if now is not None and (now.st_dev, now.st_ino) == (st.st_dev, st.st_ino):
+            if _still_at(fd, path):
                 yield fd
                 return
         finally:
@@ -171,8 +167,13 @@ class RepoSink:
     def read(self, run_id: str) -> Verified:
         """The run's verified entries, read under a shared lock so a write in progress is never
         seen half done. Raises ChainBroken when verify fails."""
-        with _locked(self._ledger(run_id), run_id, exclusive=False) as fd:
-            return _verified(run_id, _read_all(fd))
+        path = self._ledger(run_id)
+        while True:
+            with _locked(path, run_id, exclusive=False) as fd:
+                report = _verified(run_id, _read_all(fd))
+                if _still_at(fd, path):
+                    return report
+            # replaced by rename while we read: read the file that is there now
 
     def head(self, run_id: str) -> ChainHead:
         return self.read(run_id).head
@@ -180,7 +181,8 @@ class RepoSink:
     def write(self, entry: Entry) -> None:
         """Append `entry` iff it extends the current head; otherwise raise StaleHead."""
         run_id = entry.run_id
-        with _locked(self._ledger(run_id), run_id, exclusive=True) as fd:
+        path = self._ledger(run_id)
+        with _locked(path, run_id, exclusive=True) as fd:
             data = _read_all(fd)
             head = _verified(run_id, data).head
             if (entry.seq, entry.prev) != (head.seq + 1, head.link):
@@ -190,13 +192,29 @@ class RepoSink:
                 _write_all(fd, encode_line(entry))
             except BaseException:
                 os.ftruncate(fd, len(data))  # still under the lock: drop the torn part
+                os.fsync(fd)
                 raise
             # The line is whole now. If fsync fails, the entry is written but maybe not durable;
             # the caller sees an OSError and must check the ledger before writing it again.
             os.fsync(fd)
+            if not _still_at(fd, path):
+                # rename doesn't take flock, so a checkout can swap the file mid-write. The line
+                # went to a file no longer at the path; say so rather than report success.
+                raise LedgerError(f"{run_id}: {LEDGER_FILE} was replaced during the write (a git "
+                                  "checkout?); the entry was not recorded. Check the branch, then retry")
 
     def seal(self, run_id: str, hash: str, commit: str) -> None:
         raise NotImplementedError("seal is M0 unit 4 (docs/specs/S3-audit-ledger.md)")
+
+
+def _still_at(fd: int, path: Path) -> bool:
+    """Whether the open file `fd` is still the file at `path`."""
+    st = os.fstat(fd)
+    try:
+        now = path.lstat()
+    except FileNotFoundError:
+        return False
+    return (now.st_dev, now.st_ino) == (st.st_dev, st.st_ino)
 
 
 def _fsync_dir(path: Path) -> None:
