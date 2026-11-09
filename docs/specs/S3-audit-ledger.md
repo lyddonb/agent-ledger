@@ -23,8 +23,9 @@ One JSON object per line:
 
 | Field | Meaning |
 |---|---|
+| `v` | Format version. `1` for everything below. A verifier rejects a version it doesn't know |
 | `seq` | 1, 2, 3 within the run |
-| `ts` | UTC time, ISO 8601 |
+| `ts` | UTC time, ISO 8601, to the second: `2026-11-08T19:51:55Z` |
 | `run_id` | The run this belongs to |
 | `actor` | Agent or human, per S2 |
 | `type` | `charter`, `approval`, `state`, `decision`, `gate`, `gate-answer`, `verification`, `review`, `spend`, `lever`, `lesson`, `session`, `seal` |
@@ -35,6 +36,35 @@ One JSON object per line:
 | `prev` | The previous entry's hash, or `genesis:<run-id>` for the first |
 | `hash` | SHA-256 of this entry's canonical JSON (sorted keys, no spaces) without `hash` |
 
+Every field is always present. `evidence` is a list of strings and may be empty; `data` is an object and may be empty. No other keys are allowed. `summary`, `why` and each evidence pointer are non-empty and one line: no control characters and no U+2028 or U+2029. `run_id` is `<yyyy-mm-dd>-<slug>` (S1) and equals the run folder's name. `approval` and `gate-answer` entries have a human actor (S2). An agent actor has exactly `kind`, `id`, `on_behalf_of`, `tool`, `model` and `session`; a human actor has exactly `kind`, `id` and `on_behalf_of`. All are non-empty strings.
+
+> **Open (spend amounts):** format v1 has no floating-point numbers (see below), so `spend` can't carry `usd: 4.25`. The proposal is integer `usd_micros`. Decide before v1 is frozen at the `public-api` gate.
+
+### Format v1: canonical form
+
+This section is normative. A verifier in any language must agree with it byte for byte; `tests/vectors/` holds golden vectors and a golden ledger.
+
+- **Values.** A strict subset of JSON: `null`, `true`, `false`, integers, strings, arrays and objects. Integers have no fraction or exponent and lie within ±(2^53−1). There are no floats, `NaN` or `Infinity`. Object keys match `[a-z][a-z0-9_]{0,63}` and are unique. Strings are Unicode scalar values: a lone surrogate, raw or escaped, is invalid. No Unicode normalization is applied anywhere.
+- **Encoding.** RFC 8785 (JCS) for these values: no whitespace; object members sorted by key (keys are ASCII, so byte order equals code-point order); integers in shortest decimal form, with no `-0`; strings escape `"` and `\` and use `\b \f \n \r \t`, write every other U+0000 to U+001F as `\u00xx` in lowercase hex, and write everything else, including `/`, DEL and non-ASCII, as raw UTF-8.
+- **Hash.** `hash` is the lowercase hex SHA-256 of the canonical encoding of the entry without its `hash` member.
+- **Lines.** Each line of `ledger.jsonl` is the canonical encoding of the whole entry, `hash` included, followed by one LF. The file is UTF-8 with no BOM, no CR and no blank lines, and ends with LF. A verifier compares the line's bytes with the canonical encoding of what it parsed, so a whitespace, escape or key-order edit is an error, never normalized away.
+
+### What `ledger verify` detects
+
+Each line is linked to the previous line's stored `seq` and `hash`, so a problem is reported on the line where it shows, not on every line after it.
+
+| Change to the file | Reported |
+|---|---|
+| Any changed byte | On the changed line (`non-canonical`, `bad-json`, `schema` or `hash-mismatch`) |
+| A line edited and its hash recomputed | On the next line (`prev-mismatch`) |
+| A deleted line, other than the last | On the line after the gap (`seq-mismatch`, `prev-mismatch`) |
+| Two lines swapped | On the first moved line and the lines around each move |
+| A forged `prev` | On that line (`prev-mismatch`, or `schema` for a genesis link out of place) |
+| A line copied in from another run | On that line (`run-id-mismatch`) |
+| A write cut off mid-line | On the last line (`torn-line`) |
+
+A chain on its own can't detect entries cut from the end, a suffix rewritten with recomputed hashes, or a whole file replaced by another valid chain: the hash has no secret. Seals, `INDEX.jsonl` and `verify --base` (M0 unit 4) close those gaps by anchoring the head in git history.
+
 ## The ledger CLI
 
 `ledger` is a standard-library Python CLI in this repo, installed once per machine (agentfiles installs it) and pinned by version in CI. bstack's show-me-your-work keeps its review steps and calls the CLI instead of `log.sh`.
@@ -44,6 +74,7 @@ One JSON object per line:
 | `ledger init <slug>` | Creates the run folder and the genesis entry |
 | `ledger append --type T --summary S --why W --evidence E` | Redacts, chains and writes one entry through each configured sink |
 | `ledger verify [--base origin/main]` | Checks every chain, that existing lines are unchanged relative to the base, and that each seal names a commit in history |
+| `ledger verify RUN_FOLDER` | Checks one run's chain (built in M0 unit 1). Exit 0 verified, 1 failed, 2 usage or read error |
 | `ledger show <run-id>` | Prints a readable table, newest last |
 | `ledger session add <file>` | Redacts, compresses and stores a transcript, then appends a `session` entry with both hashes |
 | `ledger seal <run-id>` | Writes the `seal` entry (final hash and head commit) and appends it to `INDEX.jsonl` |
