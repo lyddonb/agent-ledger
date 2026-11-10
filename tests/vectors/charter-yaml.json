@@ -1,0 +1,4367 @@
+[
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "\"\\u00e9\" %",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z a  b",
+"yaml": "2026-11-10T10:00:00Z a  b"
+},
+{
+"text": "a",
+"yaml": "a"
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "a OFF",
+"yaml": "a OFF"
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "{usd: 00, a-b: {usd: [x #y, a:b], a-b: .5 \"q\"}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a:b !t",
+"yaml": "a:b !t"
+},
+{
+"text": "{x: %, a-b: [0], usd: yes \u00e9}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0 |",
+"yaml": "0 |"
+},
+{
+"text": "{usd: {usd: [x #y True, \"a, b\" &a, 'it''s' \"q\"], k: -1}, a-b: {}, role: {a-b: 010 grok-4.7, role: {usd: yes 's', k: a, a-b: ?}}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "y",
+"yaml": "y"
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "[|, [0x1f], {role: &a}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: a 1e3}",
+"yaml": {
+"x": "a 1e3"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[src/**, OFF]",
+"yaml": [
+"src/**",
+false
+]
+},
+{
+"text": "{k: yes, a-b: \"q\"}",
+"yaml": {
+"k": true,
+"a-b": "q"
+}
+},
+{
+"text": "` ~",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ">",
+"yaml": ""
+},
+{
+"text": "{role: []}",
+"yaml": {
+"role": []
+}
+},
+{
+"text": "\u00e9",
+"yaml": "\u00e9"
+},
+{
+"text": "10.",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": ":",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: [{a-b: 's' .5, usd: 1e3, role: a}], a-b: grok-4.7 it's, role: {k: {usd: .5}}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ">",
+"yaml": ""
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: [[2026-11-10T10:00:00Z, grok-4.7, 10:30], -1], role: 2026-11-10}",
+"yaml": {
+"x": [
+[
+{
+"__type__": "datetime"
+},
+"grok-4.7",
+630
+],
+-1
+],
+"role": {
+"__type__": "date"
+}
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{a-b: [[]], k: [{x: `, k: OFF, role: :}, {k: .inf, a-b: +1}]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "@",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "True",
+"yaml": true
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "10h",
+"yaml": "10h"
+},
+{
+"text": "[src/**, {usd: {role: on, a-b: 2026-11-10 \"\\u00e9\", usd: src/**}}]",
+"yaml": [
+"src/**",
+{
+"usd": {
+"role": true,
+"a-b": "2026-11-10 \"\\u00e9\"",
+"usd": "src/**"
+}
+}
+]
+},
+{
+"text": "{a-b: [], usd: grok-4.7, role: it's}",
+"yaml": {
+"a-b": [],
+"usd": "grok-4.7",
+"role": "it's"
+}
+},
+{
+"text": "1",
+"yaml": 1
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1 ~",
+"yaml": "1 ~"
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "0 x #y",
+"yaml": "0 x"
+},
+{
+"text": ">",
+"yaml": ""
+},
+{
+"text": "True",
+"yaml": true
+},
+{
+"text": "{a-b: No, x: *, usd: !t}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{role: |, k: [: |, &a]}, [>]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "{a-b: []}",
+"yaml": {
+"a-b": []
+}
+},
+{
+"text": "\"q\" #",
+"yaml": "q"
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "1_000",
+"yaml": 1000
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "x #y",
+"yaml": "x"
+},
+{
+"text": "[[10.], [:, {k: .5 >, usd: OFF}]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "2026-11-10",
+"yaml": {
+"__type__": "date"
+}
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "{usd: {role: .inf}, a-b: a: b}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "null yes",
+"yaml": "null yes"
+},
+{
+"text": "{a-b: {}}",
+"yaml": {
+"a-b": {}
+}
+},
+{
+"text": "{usd: it's, role: 10:30, x: {a-b: OFF, x: {}, k: OFF -}}",
+"yaml": {
+"usd": "it's",
+"role": 630,
+"x": {
+"a-b": false,
+"x": {},
+"k": "OFF -"
+}
+}
+},
+{
+"text": "\"q\"",
+"yaml": "q"
+},
+{
+"text": "{k: 10:30, a-b: 10.}",
+"yaml": {
+"k": 630,
+"a-b": {
+"__type__": "float"
+}
+}
+},
+{
+"text": "{a-b: [1_000], x: [?], role: >}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "[`]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "[[y y], {usd: {usd: src/**, k: 2026-11-10}, a-b: True x #y}, {usd: [\u00e9, *, x #y], role: [- 1e3], x: src/**}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\"q\"",
+"yaml": "q"
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "[10. >, x #y]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "| ?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "10.",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "{role: [], a-b: a: b}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "| src/**",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: yes 1_000, k: []}",
+"yaml": {
+"x": "yes 1_000",
+"k": []
+}
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "{usd: [\"q\"], k: No}",
+"yaml": {
+"usd": [
+"q"
+],
+"k": false
+}
+},
+{
+"text": "[[00 \"q\"], 0, [> `, 1:2:3]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{k: [[grok-4.7, -1, a \u00e9], #, 1e3]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "#",
+"yaml": null
+},
+{
+"text": ".inf",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z",
+"yaml": {
+"__type__": "datetime"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "!t",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ":",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "? \u00e9",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1_000",
+"yaml": 1000
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{x: 10h}",
+"yaml": {
+"x": "10h"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z",
+"yaml": {
+"__type__": "datetime"
+}
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "[[none &a, a: b, [True a  b]], [!t src/**, :, \"\\u00e9\" 10.], {usd: #, a-b: !t}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[>, ['it''s', a none, [!t, 0x1f]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "#",
+"yaml": null
+},
+{
+"text": "&a -",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "grok-4.7",
+"yaml": "grok-4.7"
+},
+{
+"text": "1 -1",
+"yaml": "1 -1"
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": ">",
+"yaml": ""
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "0x1f none",
+"yaml": "0x1f none"
+},
+{
+"text": "[{}, {role: [a:b]}, {a-b: [%, \u00e9]}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "OFF",
+"yaml": false
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a",
+"yaml": "a"
+},
+{
+"text": ".inf",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "y %",
+"yaml": "y %"
+},
+{
+"text": "{k: .5, x: {usd: +1}}",
+"yaml": {
+"k": {
+"__type__": "float"
+},
+"x": {
+"usd": 1
+}
+}
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "{a-b: y}",
+"yaml": {
+"a-b": "y"
+}
+},
+{
+"text": "`",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ".5 010",
+"yaml": ".5 010"
+},
+{
+"text": "[[[- -, 1e3], [:, a  b 's']], 2026-11-10]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: ?, usd: null, role: 0}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "~ .inf",
+"yaml": "~ .inf"
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "[[null ?, .inf 2026-11-10], {role: {usd: y @}, x: [?, 'it''s', >], usd: {role: #, usd: a, a-b: : ?}}, 'it''s']",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}, [[\"q\", src/**, .5]], []]",
+"yaml": [
+{},
+[
+[
+"q",
+"src/**",
+{
+"__type__": "float"
+}
+]
+],
+[]
+]
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a: b",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[010, \"a, b\"]",
+"yaml": [
+8,
+"a, b"
+]
+},
+{
+"text": "grok-4.7",
+"yaml": "grok-4.7"
+},
+{
+"text": "[it's `]",
+"yaml": [
+"it's `"
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{a-b: >}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z 10.",
+"yaml": "2026-11-10T10:00:00Z 10."
+},
+{
+"text": "[{}, {}, {k: {k: \"q\", usd: a, a-b: 2026-11-10}, x: \"\\u00e9\" 1e3}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z",
+"yaml": {
+"__type__": "datetime"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "1_000",
+"yaml": 1000
+},
+{
+"text": "{role: 10h, x: !t}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1:2:3 2026-11-10",
+"yaml": "1:2:3 2026-11-10"
+},
+{
+"text": "[[.5, a], .inf, {}]",
+"yaml": [
+[
+{
+"__type__": "float"
+},
+"a"
+],
+{
+"__type__": "float"
+},
+{}
+]
+},
+{
+"text": "grok-4.7 \"q\"",
+"yaml": "grok-4.7 \"q\""
+},
+{
+"text": "OFF 1e3",
+"yaml": "OFF 1e3"
+},
+{
+"text": "2026-11-10T10:00:00Z OFF",
+"yaml": "2026-11-10T10:00:00Z OFF"
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "1:2:3 #",
+"yaml": 3723
+},
+{
+"text": "a x #y",
+"yaml": "a x"
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "2026-11-10 :",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: [], role: []}",
+"yaml": {
+"k": [],
+"role": []
+}
+},
+{
+"text": "1e3 OFF",
+"yaml": "1e3 OFF"
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "[[], @, 10h 10.]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "a: b",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "True 1",
+"yaml": "True 1"
+},
+{
+"text": "{usd: `}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[- -, [], {}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "True 10:30",
+"yaml": "True 10:30"
+},
+{
+"text": "!t ?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[[], [010 a, 10:30, it's]], {x: .inf, k: [No, OFF]}]",
+"yaml": [
+[
+[],
+[
+"010 a",
+630,
+"it's"
+]
+],
+{
+"x": {
+"__type__": "float"
+},
+"k": [
+false,
+false
+]
+}
+]
+},
+{
+"text": "[x #y True, [010 -]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": ">",
+"yaml": ""
+},
+{
+"text": "{usd: +1}",
+"yaml": {
+"usd": 1
+}
+},
+{
+"text": "[{}, [], {k: {k: 2026-11-10T10:00:00Z}, a-b: {role: src/**}, role: src/**}]",
+"yaml": [
+{},
+[],
+{
+"k": {
+"k": {
+"__type__": "datetime"
+}
+},
+"a-b": {
+"role": "src/**"
+},
+"role": "src/**"
+}
+]
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "{usd: {a-b: x #y, x: ['it''s', -], k: \"q\"}, role: grok-4.7, k: yes y}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "{a-b: [{a-b: .5}]}",
+"yaml": {
+"a-b": [
+{
+"a-b": {
+"__type__": "float"
+}
+}
+]
+}
+},
+{
+"text": "[{role: +1, x: \"q\", usd: True 0x1f}, {role: {role: 1:2:3, usd: \"a, b\"}, a-b: [\"a, b\" \"a, b\"]}, [.inf, []]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: 1:2:3 1_000, k: {}, role: .5}",
+"yaml": {
+"usd": "1:2:3 1_000",
+"k": {},
+"role": {
+"__type__": "float"
+}
+}
+},
+{
+"text": "none",
+"yaml": "none"
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "{k: a  b, usd: !t 2026-11-10T10:00:00Z}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a  b",
+"yaml": "a  b"
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "2026-11-10T10:00:00Z >",
+"yaml": "2026-11-10T10:00:00Z >"
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: []}",
+"yaml": {
+"k": []
+}
+},
+{
+"text": "'s'",
+"yaml": "s"
+},
+{
+"text": "2026-11-10T10:00:00Z",
+"yaml": {
+"__type__": "datetime"
+}
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[[], {a-b: 010 1e3, k: #, role: on}, [+1]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[]]",
+"yaml": [
+[]
+]
+},
+{
+"text": "{role: 1e3 it's, a-b: @, k: []}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}]",
+"yaml": [
+{}
+]
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "[\"\\u00e9\", @, null]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "True",
+"yaml": true
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "{x: [], k: src/** y}",
+"yaml": {
+"x": [],
+"k": "src/** y"
+}
+},
+{
+"text": "{usd: 1, x: {usd: [1_000, 2026-11-10, 10.]}}",
+"yaml": {
+"usd": 1,
+"x": {
+"usd": [
+1000,
+{
+"__type__": "date"
+},
+{
+"__type__": "float"
+}
+]
+}
+}
+},
+{
+"text": "{role: [{x: y}, a, 0], a-b: -, x: [[.inf src/**], 10h]}",
+"yaml": {
+"role": [
+{
+"x": "y"
+},
+"a",
+0
+],
+"a-b": "-",
+"x": [
+[
+".inf src/**"
+],
+"10h"
+]
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "a +1",
+"yaml": "a +1"
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "[{a-b: 00 True}]",
+"yaml": [
+{
+"a-b": "00 True"
+}
+]
+},
+{
+"text": "!t 'it''s'",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}, 1e3, - 1e3]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[a:b]",
+"yaml": [
+"a:b"
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[[` it's, [a  b], {usd: .5, k: \"q\"}]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[010 grok-4.7, [[>, | src/**], 2026-11-10], [[yes], [], [x #y, 0x1f]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: 'it''s'}",
+"yaml": {
+"x": "it's"
+}
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "[~, {k: on}, [null *]]",
+"yaml": [
+null,
+{
+"k": true
+},
+[
+"null *"
+]
+]
+},
+{
+"text": "* a:b",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{usd: -1}",
+"yaml": {
+"usd": -1
+}
+},
+{
+"text": "10.",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "10:30 010",
+"yaml": "10:30 010"
+},
+{
+"text": "?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "+1 2026-11-10",
+"yaml": "+1 2026-11-10"
+},
+{
+"text": "a:b a:b",
+"yaml": "a:b a:b"
+},
+{
+"text": "[[{}], src/**, {usd: it's, a-b: {role: \"\\u00e9\" OFF}, k: | \u00e9}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-1 2026-11-10",
+"yaml": "-1 2026-11-10"
+},
+{
+"text": "{k: 1_000, role: {role: OFF a}}",
+"yaml": {
+"k": 1000,
+"role": {
+"role": "OFF a"
+}
+}
+},
+{
+"text": "&a @",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "{x: 10h, k: %}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: a: b %}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: [{}, [*], []], x: ? yes, a-b: +1}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[.inf, {usd: 010}, 10:30 \"q\"]",
+"yaml": [
+{
+"__type__": "float"
+},
+{
+"usd": 8
+},
+"10:30 \"q\""
+]
+},
+{
+"text": "10:30 null",
+"yaml": "10:30 null"
+},
+{
+"text": "[[` No, [], 2026-11-10T10:00:00Z]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "'s'",
+"yaml": "s"
+},
+{
+"text": "'s' 10.",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "[[@ No, \"a, b\", !t]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[0x1f x #y, -]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: \u00e9, usd: [[0, 1_000], [], [a: b, x #y -]]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "[[{k: `, role: 010 a}, []]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "2026-11-10",
+"yaml": {
+"__type__": "date"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{a-b: ?, usd: 2026-11-10T10:00:00Z}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}]",
+"yaml": [
+{}
+]
+},
+{
+"text": "grok-4.7",
+"yaml": "grok-4.7"
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "none",
+"yaml": "none"
+},
+{
+"text": "on",
+"yaml": true
+},
+{
+"text": "[[% 1_000, a: b, yes]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: {x: x #y, k: \"q\"}, k: 2026-11-10T10:00:00Z}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: [src/**, 0x1f null, {k: No, a-b: grok-4.7 ?}], a-b: grok-4.7}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{role: []}",
+"yaml": {
+"role": []
+}
+},
+{
+"text": ".inf",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "[: True, grok-4.7 %]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{k: grok-4.7, a-b: 10h}",
+"yaml": {
+"k": "grok-4.7",
+"a-b": "10h"
+}
+},
+{
+"text": "? -",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: @}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "[:, {}, .inf]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: [on], usd: >, k: {x: -, k: | 010}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "!t &a",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a  b y",
+"yaml": "a  b y"
+},
+{
+"text": "[1_000, \"q\" a, 2026-11-10T10:00:00Z]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: &a it's}",
+"yaml": {
+"a-b": "it's"
+}
+},
+{
+"text": "[a  b, {k: {a-b: True}, a-b: [], role: No 10.}, a  b]",
+"yaml": [
+"a  b",
+{
+"k": {
+"a-b": true
+},
+"a-b": [],
+"role": "No 10."
+},
+"a  b"
+]
+},
+{
+"text": "{k: * \"a, b\", usd: .inf}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: [?, [\u00e9], 1_000], k: null, a-b: {}}",
+"yaml": {
+"x": [
+{
+"__type__": "non-string key"
+},
+[
+"\u00e9"
+],
+1000
+],
+"k": null,
+"a-b": {}
+}
+},
+{
+"text": "[True a:b]",
+"yaml": [
+"True a:b"
+]
+},
+{
+"text": "{a-b: {role: [\u00e9 .5, 10:30 2026-11-10], x: -1, k: []}, k: 10:30 on}",
+"yaml": {
+"a-b": {
+"role": [
+"\u00e9 .5",
+"10:30 2026-11-10"
+],
+"x": -1,
+"k": []
+},
+"k": "10:30 on"
+}
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "['it''s', 010]",
+"yaml": [
+"it's",
+8
+]
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "{a-b: [{k: -}]}",
+"yaml": {
+"a-b": [
+{
+"k": "-"
+}
+]
+}
+},
+{
+"text": "[OFF, on a:b]",
+"yaml": [
+false,
+"on a:b"
+]
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[[{a-b: -, k: src/**}, 's', [it's, .inf, !t]], 1]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "{usd: ~, k: [[.inf, yes], 1_000]}",
+"yaml": {
+"usd": null,
+"k": [
+[
+{
+"__type__": "float"
+},
+true
+],
+1000
+]
+}
+},
+{
+"text": "[{usd: {usd: 'it''s', x: ?}}, `]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\"a, b\"",
+"yaml": "a, b"
+},
+{
+"text": "[-]",
+"yaml": [
+"-"
+]
+},
+{
+"text": "[[{a-b: *}], 1 1_000, OFF]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a  b",
+"yaml": "a  b"
+},
+{
+"text": "a:b .5",
+"yaml": "a:b .5"
+},
+{
+"text": "['it''s']",
+"yaml": [
+"it's"
+]
+},
+{
+"text": "{role: [[], No 's', a: b], a-b: {usd: a: b, role: 10:30}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "0x1f 10:30",
+"yaml": "0x1f 10:30"
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "{a-b: {role: [], a-b: |}, x: !t}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "['s']",
+"yaml": [
+"s"
+]
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "it's *",
+"yaml": "it's *"
+},
+{
+"text": "[[: +1, ` 's', *], {}, 0 \"q\"]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": ":",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: {a-b: {usd: \u00e9 y, k: \"a, b\", role: \"q\"}}, k: OFF True, x: [{}, .5]}",
+"yaml": {
+"a-b": {
+"a-b": {
+"usd": "\u00e9 y",
+"k": "a, b",
+"role": "q"
+}
+},
+"k": "OFF True",
+"x": [
+{},
+{
+"__type__": "float"
+}
+]
+}
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "[+1]",
+"yaml": [
+1
+]
+},
+{
+"text": "[null, [src/** \"a, b\", 2026-11-10, grok-4.7]]",
+"yaml": [
+null,
+[
+"src/** \"a",
+"b\"",
+{
+"__type__": "date"
+},
+"grok-4.7"
+]
+]
+},
+{
+"text": "~ a: b",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "OFF No",
+"yaml": "OFF No"
+},
+{
+"text": "{a-b: [00, {}], usd: []}",
+"yaml": {
+"a-b": [
+0,
+{}
+],
+"usd": []
+}
+},
+{
+"text": "[{a-b: a: b}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: @ y, x: 010, usd: {}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "% .inf",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-1 ?",
+"yaml": "-1 ?"
+},
+{
+"text": "{role: {}}",
+"yaml": {
+"role": {}
+}
+},
+{
+"text": "[[*, a: b], #, null]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "2026-11-10 +1",
+"yaml": "2026-11-10 +1"
+},
+{
+"text": "[{}]",
+"yaml": [
+{}
+]
+},
+{
+"text": "\u00e9",
+"yaml": "\u00e9"
+},
+{
+"text": "{x: null}",
+"yaml": {
+"x": null
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "a: b 0x1f",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "it's 10h",
+"yaml": "it's 10h"
+},
+{
+"text": "{x: [-1], k: y, role: {}}",
+"yaml": {
+"x": [
+-1
+],
+"k": "y",
+"role": {}
+}
+},
+{
+"text": "+1 it's",
+"yaml": "+1 it's"
+},
+{
+"text": ">",
+"yaml": ""
+},
+{
+"text": ".inf",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "{role: src/**}",
+"yaml": {
+"role": "src/**"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z",
+"yaml": {
+"__type__": "datetime"
+}
+},
+{
+"text": "{a-b: [yes \"\\u00e9\"], k: [:], role: 2026-11-10T10:00:00Z}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "on 010",
+"yaml": "on 010"
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "[-1]",
+"yaml": [
+-1
+]
+},
+{
+"text": "x #y True",
+"yaml": "x"
+},
+{
+"text": "[[x #y 's', {x: &a, k: True, a-b: 1}, {a-b: *, x: |}], 10h]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "none",
+"yaml": "none"
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{role: {}, x: []}",
+"yaml": {
+"role": {},
+"x": []
+}
+},
+{
+"text": "on",
+"yaml": true
+},
+{
+"text": ".inf",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "{k: %, role: 0, x: [{}]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "{a-b: [{usd: y}, .5, {role: a  b, k: grok-4.7, a-b: :}], x: null}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: {}}",
+"yaml": {
+"usd": {}
+}
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "\u00e9",
+"yaml": "\u00e9"
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "['s']",
+"yaml": [
+"s"
+]
+},
+{
+"text": ".5 ?",
+"yaml": ".5 ?"
+},
+{
+"text": "True",
+"yaml": true
+},
+{
+"text": "[{}, a  b]",
+"yaml": [
+{},
+"a  b"
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{role: [on 1e3, 010], usd: \"\\u00e9\", x: > 2026-11-10}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: *, usd: [{}]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "src/** 010",
+"yaml": "src/** 010"
+},
+{
+"text": "| 2026-11-10",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "10h",
+"yaml": "10h"
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "!t",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}]",
+"yaml": [
+{}
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "1_000 yes",
+"yaml": "1_000 yes"
+},
+{
+"text": "[!t 10:30]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{a-b: {x: it's, a-b: it's :}, usd: [], k: []}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{k: 2026-11-10T10:00:00Z}, 0, #]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "` 1e3",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[[1:2:3, %, 10:30], {k: True}, a], \"q\", {k: -, x: []}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a  b .5",
+"yaml": "a  b .5"
+},
+{
+"text": "[- #, y OFF]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{role: []}, 10. .inf]",
+"yaml": [
+{
+"role": []
+},
+"10. .inf"
+]
+},
+{
+"text": "1_000 \"\\u00e9\"",
+"yaml": "1_000 \"\\u00e9\""
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "2026-11-10T10:00:00Z",
+"yaml": {
+"__type__": "datetime"
+}
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "{x: {usd: @, k: {}, role: {role: 10:30 .inf, k: True}}, role: \u00e9}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{role: !t}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "- 1:2:3",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "none",
+"yaml": "none"
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "\"q\"",
+"yaml": "q"
+},
+{
+"text": "&a it's",
+"yaml": "it's"
+},
+{
+"text": "10. .5",
+"yaml": "10. .5"
+},
+{
+"text": "[[], {usd: it's 0x1f, k: ~, role: [# True, >, \"q\" !t]}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: it's \"\\u00e9\"}",
+"yaml": {
+"usd": "it's \"\\u00e9\""
+}
+},
+{
+"text": "10h a  b",
+"yaml": "10h a  b"
+},
+{
+"text": "@",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "OFF 010",
+"yaml": "OFF 010"
+},
+{
+"text": "[010 10h, 2026-11-10, *]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "grok-4.7",
+"yaml": "grok-4.7"
+},
+{
+"text": "[True]",
+"yaml": [
+true
+]
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "[1e3, [[], {}], * #]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "{a-b: [0], k: 2026-11-10}",
+"yaml": {
+"a-b": [
+0
+],
+"k": {
+"__type__": "date"
+}
+}
+},
+{
+"text": "yes 10h",
+"yaml": "yes 10h"
+},
+{
+"text": "{x: 10:30 -, usd: [1e3 a: b]}",
+"yaml": {
+"x": "10:30 -",
+"usd": [
+{
+"1e3 a": "b"
+}
+]
+}
+},
+{
+"text": "it's",
+"yaml": "it's"
+},
+{
+"text": "00 :",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a  b",
+"yaml": "a  b"
+},
+{
+"text": "[null, {x: {role: 1, a-b: \"a, b\", usd: %}, role: {role: OFF, a-b: 10.}}, [?, src/**, [%]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}, {x: [a]}, 1]",
+"yaml": [
+{},
+{
+"x": [
+"a"
+]
+},
+1
+]
+},
+{
+"text": "{usd: src/** *, x: @}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: x #y, role: [], k: {k: [0x1f, - 2026-11-10T10:00:00Z]}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: {k: {}}, x: {x: 1_000, k: [- OFF, &a], a-b: {k: .5 >, role: > 2026-11-10}}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "!t x #y",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "[{}, 0x1f, [{x: OFF, a-b: %}, {usd: yes}]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "True",
+"yaml": true
+},
+{
+"text": "?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: src/** 10:30}",
+"yaml": {
+"usd": "src/** 10:30"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "x #y",
+"yaml": "x"
+},
+{
+"text": "10:30 none",
+"yaml": "10:30 none"
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "[[{}], 1:2:3, *]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\u00e9",
+"yaml": "\u00e9"
+},
+{
+"text": "[?, - -]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "10h none",
+"yaml": "10h none"
+},
+{
+"text": "2026-11-10 10.",
+"yaml": "2026-11-10 10."
+},
+{
+"text": "x #y",
+"yaml": "x"
+},
+{
+"text": "1_000",
+"yaml": 1000
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "a",
+"yaml": "a"
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "10h 2026-11-10T10:00:00Z",
+"yaml": "10h 2026-11-10T10:00:00Z"
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "{a-b: > True, k: [[null], []]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "#",
+"yaml": null
+},
+{
+"text": "a: b",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[@ on]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: 2026-11-10, x: {k: x #y, role: !t}, a-b: [0x1f]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a  b",
+"yaml": "a  b"
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "src/** 00",
+"yaml": "src/** 00"
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "[[{usd: +1, k: 1e3, role: a}, [yes, No]]]",
+"yaml": [
+[
+{
+"usd": 1,
+"k": "1e3",
+"role": "a"
+},
+[
+true,
+false
+]
+]
+]
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "{usd: [[*]], role: 1, x: on}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "@",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\"\\u00e9\" y",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[No, []]",
+"yaml": [
+false,
+[]
+]
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{a-b: #, k: {x: &a}}, \"q\"]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: 's', role: {a-b: {}}}",
+"yaml": {
+"k": "s",
+"role": {
+"a-b": {}
+}
+}
+},
+{
+"text": "{k: {k: {usd: 0, x: none, k: 2026-11-10T10:00:00Z 1e3}, usd: %}, a-b: [[~, 1e3, 2026-11-10], 2026-11-10T10:00:00Z], usd: {k: {role: ? 2026-11-10}, x: [it's -, a it's], role: [1e3, +1, yes]}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "!t none",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "grok-4.7 00",
+"yaml": "grok-4.7 00"
+},
+{
+"text": "[> \"a, b\"]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1:2:3 +1",
+"yaml": "1:2:3 +1"
+},
+{
+"text": "\u00e9",
+"yaml": "\u00e9"
+},
+{
+"text": "none",
+"yaml": "none"
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "y 'it''s'",
+"yaml": "y 'it''s'"
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "1_000",
+"yaml": 1000
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "grok-4.7 *",
+"yaml": "grok-4.7 *"
+},
+{
+"text": "{usd: &a}",
+"yaml": {
+"usd": null
+}
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "#",
+"yaml": null
+},
+{
+"text": "grok-4.7",
+"yaml": "grok-4.7"
+},
+{
+"text": "~ 'it''s'",
+"yaml": "~ 'it''s'"
+},
+{
+"text": "{usd: {role: 00}, a-b: []}",
+"yaml": {
+"usd": {
+"role": 0
+},
+"a-b": []
+}
+},
+{
+"text": "[.5, none #]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a",
+"yaml": "a"
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "[{a-b: [:]}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "a: b `",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: \"\\u00e9\" 1:2:3, role: [+1 10h, No 1e3]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "{k: a:b, role: yes, usd: No}",
+"yaml": {
+"k": "a:b",
+"role": true,
+"usd": false
+}
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "[1_000]",
+"yaml": [
+1000
+]
+},
+{
+"text": "OFF",
+"yaml": false
+},
+{
+"text": "OFF",
+"yaml": false
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "a: b",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "it's",
+"yaml": "it's"
+},
+{
+"text": "on",
+"yaml": true
+},
+{
+"text": "{a-b: [\"\\u00e9\" :, No]}",
+"yaml": {
+"a-b": [
+{
+"\u00e9": null
+},
+false
+]
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "?",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "~ OFF",
+"yaml": "~ OFF"
+},
+{
+"text": ".5 0x1f",
+"yaml": ".5 0x1f"
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "{x: [{role: 's', k: \"q\", x: No}, |], role: 1_000}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[OFF]",
+"yaml": [
+false
+]
+},
+{
+"text": "{x: on}",
+"yaml": {
+"x": true
+}
+},
+{
+"text": "~ none",
+"yaml": "~ none"
+},
+{
+"text": "\"q\" No",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "[10h]",
+"yaml": [
+"10h"
+]
+},
+{
+"text": "> 0x1f",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: 0x1f, usd: \"a, b\", k: @}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "@",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "010 src/**",
+"yaml": "010 src/**"
+},
+{
+"text": "y",
+"yaml": "y"
+},
+{
+"text": "[[OFF, !t 0], [+1, [yes #, a: b, none 00]], [{usd: x #y, role: True}, {k: -1, role: 10., x: a  b src/**}, [True, x #y]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a yes",
+"yaml": "a yes"
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "[!t True, {usd: ['s', x #y]}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{role: [], a-b: [], x: -}",
+"yaml": {
+"role": [],
+"a-b": [],
+"x": "-"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "10:30 1e3",
+"yaml": "10:30 1e3"
+},
+{
+"text": "[1_000, a, []]",
+"yaml": [
+1000,
+"a",
+[]
+]
+},
+{
+"text": "{a-b: 0x1f, usd: {role: {x: 1:2:3, usd: @, k: +1 >}, usd: |}, x: {role: {k: 1:2:3, role: grok-4.7, a-b: *}, usd: 10:30, a-b: 2026-11-10 on}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "'s' 0",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: on \u00e9, a-b: OFF}",
+"yaml": {
+"k": "on \u00e9",
+"a-b": false
+}
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "[.5, #, [~, y]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[{}, [[@ 's', x #y 0, .inf No]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{role: {k: yes, x: 'it''s', a-b: 1_000}, k: [-1 x #y, it's -, 0x1f], usd: @}, 00]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\"a, b\"",
+"yaml": "a, b"
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "10h",
+"yaml": "10h"
+},
+{
+"text": "{k: {k: on 00, x: [on, 10h], a-b: [a  b]}, a-b: -1 src/**, usd: 's'}",
+"yaml": {
+"k": {
+"k": "on 00",
+"x": [
+true,
+"10h"
+],
+"a-b": [
+"a  b"
+]
+},
+"a-b": "-1 src/**",
+"usd": "s"
+}
+},
+{
+"text": "on &a",
+"yaml": "on &a"
+},
+{
+"text": "[null, none]",
+"yaml": [
+null,
+"none"
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{a-b: {usd: [#, .5, True], a-b: {a-b: #, role: src/**, usd: 's'}}, x: [True, \"a, b\" 2026-11-10, {k: 10h, a-b: !t, role: a: b .inf}]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[['s', null, \u00e9], @, 10.], 1e3, OFF]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: {x: src/**, role: -, usd: x #y}, usd: a, x: {role: |, k: [1e3, a:b, No]}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": "a:b",
+"yaml": "a:b"
+},
+{
+"text": "1",
+"yaml": 1
+},
+{
+"text": "10:30 10.",
+"yaml": "10:30 10."
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{a-b: %, usd: [], k: 10:30 1:2:3}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[~ .inf, \"\\u00e9\"]",
+"yaml": [
+"~ .inf",
+"\u00e9"
+]
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[[{role: ` #}, []], 's' \u00e9, >]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1",
+"yaml": 1
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{usd: .5, x: #}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ":",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[+1]",
+"yaml": [
+1
+]
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "[\u00e9, \"\\u00e9\", []]",
+"yaml": [
+"\u00e9",
+"\u00e9",
+[]
+]
+},
+{
+"text": "@",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ".inf",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "1",
+"yaml": 1
+},
+{
+"text": "[.inf, a  b \"q\"]",
+"yaml": [
+{
+"__type__": "float"
+},
+"a  b \"q\""
+]
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "a:b",
+"yaml": "a:b"
+},
+{
+"text": "{role: [\"q\", {}], a-b: @, usd: {k: [\u00e9, on, on], usd: [\"q\", \"a, b\", src/** True]}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": ":",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "10.",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "{a-b: 2026-11-10T10:00:00Z}",
+"yaml": {
+"a-b": {
+"__type__": "datetime"
+}
+}
+},
+{
+"text": "00 !t",
+"yaml": "00 !t"
+},
+{
+"text": "[[\"a, b\" 's', {x: 10h, role: #}], y OFF]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "[!t \"\\u00e9\", [10h #, [- 10h]]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[{usd: {k: 1, usd: 00}, k: y}, &a]",
+"yaml": [
+{
+"usd": {
+"k": 1,
+"usd": 0
+},
+"k": "y"
+},
+null
+]
+},
+{
+"text": "\"q\"",
+"yaml": "q"
+},
+{
+"text": ".inf ?",
+"yaml": ".inf ?"
+},
+{
+"text": "{a-b: ` .inf, x: [[10h \"q\", - 2026-11-10]]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{x: ` 010, k: {a-b: \"a, b\" >}}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[10:30 src/**]",
+"yaml": [
+"10:30 src/**"
+]
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "'it''s'",
+"yaml": "it's"
+},
+{
+"text": "[+1, none]",
+"yaml": [
+1,
+"none"
+]
+},
+{
+"text": ".5 grok-4.7",
+"yaml": ".5 grok-4.7"
+},
+{
+"text": ".inf +1",
+"yaml": ".inf +1"
+},
+{
+"text": "{k: [\u00e9], usd: {a-b: a:b, x: `}, x: 1e3}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "010 x #y",
+"yaml": "010 x"
+},
+{
+"text": "[[[-1, grok-4.7 0, 'it''s']], on, grok-4.7]",
+"yaml": [
+[
+[
+-1,
+"grok-4.7 0",
+"it's"
+]
+],
+true,
+"grok-4.7"
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "{usd: 010}",
+"yaml": {
+"usd": 8
+}
+},
+{
+"text": "&a",
+"yaml": null
+},
+{
+"text": "No `",
+"yaml": "No `"
+},
+{
+"text": "\"\\u00e9\" 0",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[?, 00, x #y]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: 'it''s', usd: 10:30}",
+"yaml": {
+"a-b": "it's",
+"usd": 630
+}
+},
+{
+"text": "% 10.",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "{role: [none, [], 0x1f yes]}",
+"yaml": {
+"role": [
+"none",
+[],
+"0x1f yes"
+]
+}
+},
+{
+"text": "[\"q\"]",
+"yaml": [
+"q"
+]
+},
+{
+"text": "[True, 2026-11-10T10:00:00Z, [[], {k: a: b, usd: it's}]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{k: {usd: {usd: 2026-11-10, k: a  b 2026-11-10T10:00:00Z}}, role: #}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: #}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "\u00e9",
+"yaml": "\u00e9"
+},
+{
+"text": "{role: [2026-11-10, `, [y 2026-11-10]]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "!t",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "#",
+"yaml": null
+},
+{
+"text": "10h `",
+"yaml": "10h `"
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "{a-b: #}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[.5 +1, 0x1f]",
+"yaml": [
+".5 +1",
+31
+]
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "[[]]",
+"yaml": [
+[]
+]
+},
+{
+"text": "[#, # 's', []]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[y 1e3, \u00e9]",
+"yaml": [
+"y 1e3",
+"\u00e9"
+]
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "on",
+"yaml": true
+},
+{
+"text": "[{role: 10:30}, .5 \u00e9]",
+"yaml": [
+{
+"role": 630
+},
+".5 \u00e9"
+]
+},
+{
+"text": "[a  b, src/** \"\\u00e9\", `]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "-1 #",
+"yaml": -1
+},
+{
+"text": "1",
+"yaml": 1
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "[{usd: 00}, [x #y], {role: {}, a-b: {a-b: `, k: True a: b}}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[[], {k: [1:2:3, 1 's'], a-b: [`, >], usd: [on]}, x #y null]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{usd: [[`, grok-4.7], [#, \"\\u00e9\"], True], k: [{role: +1}, on, a:b]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{}, 2026-11-10T10:00:00Z ~, OFF 00]",
+"yaml": [
+{},
+"2026-11-10T10:00:00Z ~",
+"OFF 00"
+]
+},
+{
+"text": "{usd: -1}",
+"yaml": {
+"usd": -1
+}
+},
+{
+"text": "[%, [], {k: 2026-11-10T10:00:00Z}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "[x #y .5, [a  b, 10:30], |]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "src/**",
+"yaml": "src/**"
+},
+{
+"text": "10:30",
+"yaml": 630
+},
+{
+"text": "{x: .inf, k: [[], [a  b], {x: src/**, role: 's', k: 00}]}",
+"yaml": {
+"x": {
+"__type__": "float"
+},
+"k": [
+[],
+[
+"a  b"
+],
+{
+"x": "src/**",
+"role": "s",
+"k": 0
+}
+]
+}
+},
+{
+"text": "\u00e9 0x1f",
+"yaml": "\u00e9 0x1f"
+},
+{
+"text": "10. 0x1f",
+"yaml": "10. 0x1f"
+},
+{
+"text": "[[], src/**]",
+"yaml": [
+[],
+"src/**"
+]
+},
+{
+"text": "[+1]",
+"yaml": [
+1
+]
+},
+{
+"text": "[[]]",
+"yaml": [
+[]
+]
+},
+{
+"text": "OFF",
+"yaml": false
+},
+{
+"text": "x #y",
+"yaml": "x"
+},
+{
+"text": "1:2:3",
+"yaml": 3723
+},
+{
+"text": "`",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "null none",
+"yaml": "null none"
+},
+{
+"text": ": .5",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "a: b \"a, b\"",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "2026-11-10",
+"yaml": {
+"__type__": "date"
+}
+},
+{
+"text": "10.",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "[{}, {usd: 10:30, role: 2026-11-10T10:00:00Z}, No]",
+"yaml": [
+{},
+{
+"usd": 630,
+"role": {
+"__type__": "datetime"
+}
+},
+false
+]
+},
+{
+"text": "? 10.",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "2026-11-10T10:00:00Z y",
+"yaml": "2026-11-10T10:00:00Z y"
+},
+{
+"text": "[]",
+"yaml": []
+},
+{
+"text": "src/** yes",
+"yaml": "src/** yes"
+},
+{
+"text": "[No]",
+"yaml": [
+false
+]
+},
+{
+"text": "[[True 'it''s'], {usd: .inf}]",
+"yaml": [
+[
+"True 'it''s'"
+],
+{
+"usd": {
+"__type__": "float"
+}
+}
+]
+},
+{
+"text": "'s'",
+"yaml": "s"
+},
+{
+"text": "[[[]], \u00e9, [none, !t]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[1_000 x #y, {x: *, a-b: {k: ~, x: ~ .5}}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{usd: none, k: yes, a-b: 1e3}, 1:2:3, .5 src/**]",
+"yaml": [
+{
+"usd": "none",
+"k": true,
+"a-b": "1e3"
+},
+3723,
+".5 src/**"
+]
+},
+{
+"text": "[[\"a, b\"], 10:30 :, 10h]",
+"yaml": [
+[
+"a, b"
+],
+{
+"__type__": "non-string key"
+},
+"10h"
+]
+},
+{
+"text": "|",
+"yaml": ""
+},
+{
+"text": "{k: {role: 10., a-b: [@, \u00e9, ?]}, usd: \"\\u00e9\" &a}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "` .inf",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "none",
+"yaml": "none"
+},
+{
+"text": "[y, [{usd: 10:30, a-b: 1}, 's']]",
+"yaml": [
+"y",
+[
+{
+"usd": 630,
+"a-b": 1
+},
+"s"
+]
+]
+},
+{
+"text": "x #y",
+"yaml": "x"
+},
+{
+"text": ".5",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "{x: on}",
+"yaml": {
+"x": true
+}
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "0",
+"yaml": 0
+},
+{
+"text": "0x1f",
+"yaml": 31
+},
+{
+"text": "{x: \"q\", a-b: {}, usd: .5 ~}",
+"yaml": {
+"x": "q",
+"a-b": {},
+"usd": ".5 ~"
+}
+},
+{
+"text": "[{}, {x: []}, {role: {a-b: on, x: \u00e9, role: #}, x: %, a-b: 'it''s' %}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{role: 'it''s' @, a-b: \u00e9, usd: [{}, x #y, []]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "- -",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{role: +1, a-b: #, x: `}]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "#",
+"yaml": null
+},
+{
+"text": "True",
+"yaml": true
+},
+{
+"text": "yes",
+"yaml": true
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "[[OFF, [], {}], x #y]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[src/**]",
+"yaml": [
+"src/**"
+]
+},
+{
+"text": "null",
+"yaml": null
+},
+{
+"text": "10. a",
+"yaml": "10. a"
+},
+{
+"text": "-1",
+"yaml": -1
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "\"\\u00e9\"",
+"yaml": "\u00e9"
+},
+{
+"text": "{k: No 2026-11-10, usd: null ~, role: No}",
+"yaml": {
+"k": "No 2026-11-10",
+"usd": "null ~",
+"role": false
+}
+},
+{
+"text": "[1 0x1f, % True, [[a: b, a], {k: a  b, x: :}, grok-4.7]]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{a-b: [|, a  b, x #y]}",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "[{a-b: .5, role: {usd: 1e3}}, `, |]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "~",
+"yaml": null
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "0 10:30",
+"yaml": "0 10:30"
+},
+{
+"text": "[{role: 'it''s', a-b: []}]",
+"yaml": [
+{
+"role": "it's",
+"a-b": []
+}
+]
+},
+{
+"text": "y",
+"yaml": "y"
+},
+{
+"text": "[[[OFF, +1], No :]]",
+"yaml": [
+[
+[
+false,
+1
+],
+{
+"__type__": "non-string key"
+}
+]
+]
+},
+{
+"text": "{usd: \"\\u00e9\"}",
+"yaml": {
+"usd": "\u00e9"
+}
+},
+{
+"text": "[a:b, [%], []]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "none `",
+"yaml": "none `"
+},
+{
+"text": "[a, +1 2026-11-10T10:00:00Z]",
+"yaml": [
+"a",
+"+1 2026-11-10T10:00:00Z"
+]
+},
+{
+"text": "%",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "{}",
+"yaml": {}
+},
+{
+"text": "{usd: {}, a-b: null}",
+"yaml": {
+"usd": {},
+"a-b": null
+}
+},
+{
+"text": "'s'",
+"yaml": "s"
+},
+{
+"text": "010",
+"yaml": 8
+},
+{
+"text": "00",
+"yaml": 0
+},
+{
+"text": "[`]",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "*",
+"yaml": {
+"__type__": "error"
+}
+},
+{
+"text": "1e3",
+"yaml": "1e3"
+},
+{
+"text": ".5 -",
+"yaml": ".5 -"
+},
+{
+"text": "{a-b: none &a}",
+"yaml": {
+"a-b": "none &a"
+}
+},
+{
+"text": "{role: {role: {k: No, a-b: .inf}, a-b: ~}}",
+"yaml": {
+"role": {
+"role": {
+"k": false,
+"a-b": {
+"__type__": "float"
+}
+},
+"a-b": null
+}
+}
+},
+{
+"text": "No",
+"yaml": false
+},
+{
+"text": "10.",
+"yaml": {
+"__type__": "float"
+}
+},
+{
+"text": "010 \"a, b\"",
+"yaml": "010 \"a, b\""
+},
+{
+"text": "on",
+"yaml": true
+},
+{
+"text": "{x: [~, [~, \u00e9]], a-b: 1, k: True}",
+"yaml": {
+"x": [
+null,
+[
+null,
+"\u00e9"
+]
+],
+"a-b": 1,
+"k": true
+}
+}
+]
