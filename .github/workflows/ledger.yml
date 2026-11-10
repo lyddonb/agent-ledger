@@ -1,0 +1,20 @@
+name: ledger
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ledger-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # seals and --base need the full history
+      # This repo checks itself with the Action from the same commit. Other repos pin it:
+      # uses: lyddonb/agent-ledger@<commit or tag>
+      - uses: ./

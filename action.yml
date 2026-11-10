@@ -1,0 +1,60 @@
+name: ledger-verify
+description: Verify agent-ledger audit chains, seals and append-only history, and scan .audit for secrets.
+author: lyddonb
+
+inputs:
+  base:
+    description: >-
+      The ref whose merged ledgers must stay unchanged apart from appended lines. Default: the
+      pull request's base branch (origin/<base>), or for a push, the commit before the push.
+    required: false
+    default: ""
+  python-version:
+    description: Python to run the ledger CLI with (3.10 or newer; it uses only the standard library).
+    required: false
+    default: "3.12"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: ledger verify and scan
+      shell: bash
+      env:
+        RUNNER_SCRIPT: ${{ github.action_path }}/ci/run_ledger.py
+        BASE_INPUT: ${{ inputs.base }}
+        PR_BASE: ${{ github.base_ref }}
+        PUSH_BEFORE: ${{ github.event.before }}
+      run: |
+        set -uo pipefail
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          echo "::error::ledger-verify needs the full history to check seals and the base: set fetch-depth: 0 on actions/checkout"
+          exit 1
+        fi
+        base="$BASE_INPUT"
+        if [ -z "$base" ] && [ -n "$PR_BASE" ]; then
+          base="origin/$PR_BASE"
+        elif [ -z "$base" ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+          base="$PUSH_BEFORE"
+        fi
+        args=(--root "$GITHUB_WORKSPACE")
+        if [ -n "$base" ]; then
+          args+=(--base "$base")
+        else
+          echo "::warning::no base to compare with (a new branch?); merged lines aren't checked as append-only"
+        fi
+        ledger() { python -I "$RUNNER_SCRIPT" "$@"; }
+        status=0
+        echo "::group::ledger verify ${args[*]}"
+        ledger verify "${args[@]}" || status=1
+        echo "::endgroup::"
+        echo "::group::ledger scan ${args[*]}"
+        ledger scan "${args[@]}" || status=1
+        echo "::endgroup::"
+        if [ "$status" -ne 0 ]; then
+          echo "::error::ledger-verify failed; see the verify and scan output above"
+        fi
+        exit "$status"
