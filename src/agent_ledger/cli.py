@@ -15,7 +15,9 @@ from typing import Callable, Mapping
 
 from . import __version__
 from ._canon import CanonError, parse_value
-from .entry import Actor, EntryError, EntryType, _actor_from_wire
+from .charter import (CHARTER_FILE, CharterError, approval_status, approve_charter, check_charter,
+                      new_charter, read_charter)
+from .entry import Actor, EntryError, EntryType, HumanActor, _actor_from_wire
 from .redact import PolicyError, Redactor, policy_patterns
 from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, seal_run, utc_now
 from ._git import GitError
@@ -339,6 +341,99 @@ def _seal(ns: argparse.Namespace) -> int:
     return _guard("seal", ns, body)
 
 
+def _human(text: str) -> HumanActor:
+    actor = _actor(text)
+    if not isinstance(actor, HumanActor):
+        raise argparse.ArgumentTypeError("only a human approves a charter (S2); pass a human actor")
+    return actor
+
+
+def _add_charter_args(p: argparse.ArgumentParser) -> None:
+    sub = p.add_subparsers(dest="charter_command", metavar="ACTION", required=True)
+    n = sub.add_parser("new", help="write a template charter for a new run",
+                       description="Write .audit/runs/<date>-<slug>/charter.md from the S1 template. Its "
+                                   "TODO placeholders fail `check` until they are filled in.")
+    n.add_argument("slug", help="the run's slug; the run id is <date>-<slug>")
+    n.add_argument("--title", required=True, help="one line: what the run does")
+    n.add_argument("--tier", type=int, choices=[1, 2, 3], default=2, help="1 routine, 2 significant, 3 critical")
+    n.add_argument("--date", type=_day, default=None, help="the run id's date (default: today in UTC)")
+    _add_root_arg(n)
+    c = sub.add_parser("check", help="check a charter against its tier, and show its approval",
+                       description="Check charter.md for its tier's required fields and sections (S1), "
+                                   "and show whether the ledger approves this exact version. Exit 0 valid, "
+                                   "1 invalid (or, with --require-approved, not approved), 2 unreadable.")
+    c.add_argument("run_id", metavar="RUN_ID")
+    c.add_argument("--require-approved", action="store_true",
+                   help="also fail unless the latest approval in the ledger is for this exact charter")
+    _add_root_arg(c)
+    a = sub.add_parser("approve", help="record a human's approval of the charter as it is now",
+                       description="Append an approval entry naming the charter's sha256. The charter must "
+                                   "pass check and the run must be started (`ledger init`). Editing the "
+                                   "charter afterward puts it back to draft until approved again.")
+    a.add_argument("run_id", metavar="RUN_ID")
+    a.add_argument("--actor", type=_human, required=True, help="the approving human, as S2 JSON")
+    a.add_argument("--why", default="The charter was reviewed and approved before work starts (S1)",
+                   help="one line: how and why it was approved")
+    a.add_argument("--quote", default=None, help="the approver's words, verbatim")
+    a.add_argument("--channel", default=None, help="where the approval was given, such as 'claude-code chat'")
+    a.add_argument("--relayed-by", default=None, help="the agent id that typed this approval in, if any")
+    _add_redact_arg(a)
+    _add_root_arg(a)
+    r = sub.add_parser("render", help="read the charter aloud or as video (M2, not built)")
+    r.add_argument("args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
+
+
+def _charter(ns: argparse.Namespace) -> int:
+    if ns.charter_command == "render":
+        print("ledger charter render: not implemented yet (milestone M2). Specified in "
+              "docs/specs/S1-run-charter.md.", file=sys.stderr)
+        return EXIT_ERROR
+
+    def body() -> int:
+        root = _root(ns)
+        sink = repo_sink(root)
+        if ns.charter_command == "new":
+            run_id = run_id_for(ns.slug, ns.date or utc_now().date())
+            path = new_charter(sink.runs_dir, run_id, title=ns.title, tier=ns.tier)
+            print(f"wrote {path.relative_to(root)}; fill in the TODOs, then `ledger charter check {run_id}`")
+            return EXIT_OK
+        path = sink.run_dir(ns.run_id) / CHARTER_FILE
+        rel = path.relative_to(root)
+        charter = read_charter(path)
+        if ns.charter_command == "approve":
+            r = approve_charter(sink, ns.run_id, actor=ns.actor, why=ns.why, quote=ns.quote,
+                                channel=ns.channel, relayed_by=ns.relayed_by,
+                                append=lambda *a, **k: append(*a, redactor=_redactor(ns), **k))
+            if r.new:
+                print(f"approved {ns.run_id}: charter sha256 {charter.sha256[:12]} at seq {r.entry.seq}")
+            else:
+                print(f"{ns.run_id}: this charter is already approved at seq {r.entry.seq}; nothing to do")
+            return EXIT_OK
+        problems = check_charter(charter, ns.run_id)
+        for p in problems:
+            print(f"{rel}:{p.line}: {p.message}" if p.line else f"{rel}: {p.message}")
+        status = approval_status(sink, ns.run_id, charter.sha256)
+        if status.state == "approved":
+            print(f"approved at seq {status.approval_seq} (sha256 {charter.sha256[:12]})")
+        elif status.state == "stale":
+            print(f"draft: edited since the approval at seq {status.approval_seq}; approve it again")
+        else:
+            print("draft: not approved")
+        if problems:
+            print(f"FAILED {ns.run_id}: {len(problems)} problems (tier {charter.fields.get('tier')})")
+            return EXIT_FAILED
+        print(f"ok {ns.run_id}: tier {charter.fields.get('tier')} charter is complete")
+        if ns.require_approved and status.state != "approved":
+            return EXIT_FAILED
+        return EXIT_OK
+
+    try:
+        return _guard(f"charter {ns.charter_command}", ns, body)
+    except CharterError as e:
+        print(f"ledger charter {ns.charter_command}: {e}", file=sys.stderr)
+        return EXIT_FAILED if ns.charter_command == "approve" else EXIT_ERROR
+
+
 # subcommand -> (add its arguments, run it). A command is implemented iff it is here.
 HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[argparse.Namespace], int]]] = {
     "init": (_add_init_args, _init),
@@ -347,6 +442,7 @@ HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[a
     "show": (_add_show_args, _show),
     "session": (_add_session_args, _session),
     "seal": (_add_seal_args, _seal),
+    "charter": (_add_charter_args, _charter),
 }
 
 
