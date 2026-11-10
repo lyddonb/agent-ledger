@@ -67,6 +67,7 @@ class SessionAddTest(unittest.TestCase):
         self.assertEqual(d["redacted_sha256"], hashlib.sha256(gzip.decompress(archive.read_bytes())).hexdigest())
         self.assertNotEqual(d["raw_sha256"], d["redacted_sha256"])
         self.assertEqual(d["raw_bytes"], path.stat().st_size)
+        self.assertEqual(archive.stat().st_mode & 0o777, 0o644)
 
     def test_the_chain_still_verifies_and_the_entry_is_a_session_entry(self):
         entry = self.add(self.transcript(transcript_lines())).entry
@@ -100,20 +101,80 @@ class SessionAddTest(unittest.TestCase):
         archive = self.root / self.add(path).entry.data["path"]
         first = archive.read_bytes()
         archive.unlink()
-        self.add(path, session_id="abc123")  # unchanged: no new entry, and the file stays gone
-        self.assertFalse(archive.exists())
+        redone = self.add(path, session_id="abc123")  # a missing archive is rebuilt
+        self.assertTrue(redone.new)
+        self.assertEqual(archive.read_bytes(), first)
         other = self.add(self.transcript(transcript_lines(), name="again.jsonl"), session_id="copy")
         self.assertEqual((self.root / other.entry.data["path"]).read_bytes(), first)
 
+    def test_word_ids_and_slugs_are_not_mangled_and_still_dedupe(self):
+        path = self.transcript(transcript_lines(), name="disk-usage-analysis-session-one.jsonl")
+        first = self.add(path)
+        d = first.entry.data
+        self.assertEqual(d["session_id"], "disk-usage-analysis-session-one")
+        self.assertTrue((self.root / d["path"]).is_file())
+        self.assertEqual(first.entry.evidence, (d["path"],))
+        self.assertFalse(self.add(path).new)
+
+    def test_a_refused_add_can_be_retried(self):
+        path = self.src / "bin.jsonl"
+        path.write_bytes(b'{"a": "\xff"}\n')
+        self.assertFalse(self.add(path).archived)
+        again = self.add(path)
+        self.assertTrue(again.new, "a refusal must not be cached as done")
+        path.write_bytes(b'{"a": "fixed"}\n')
+        self.assertTrue(self.add(path).archived)
+
+    def test_new_patterns_redo_an_archived_transcript(self):
+        path = self.transcript(transcript_lines(json.dumps({"t": "acmeSECRET99"})))
+        self.add(path)
+        redone = add_session(self.sink, RUN, path, actor=AGENT, redactor=Redactor([r"acme\w+"]), root=self.root)
+        self.assertTrue(redone.new)
+        body = gzip.decompress((self.root / redone.entry.data["path"]).read_bytes())
+        self.assertNotIn(b"acmeSECRET99", body)
+
+    def test_dotted_names_get_their_own_ids(self):
+        a = self.add(self.transcript(transcript_lines(), name="x.one.jsonl"))
+        b = self.add(self.transcript(transcript_lines("{}"), name="x.two.jsonl"))
+        self.assertEqual((a.entry.data["session_id"], b.entry.data["session_id"]), ("x.one", "x.two"))
+
+    def test_a_failed_append_leaves_the_previous_archive_alone(self):
+        path = self.transcript(transcript_lines())
+        archive = self.root / self.add(path).entry.data["path"]
+        before = archive.read_bytes()
+        path = self.transcript(transcript_lines("{}"))
+        ledger = self.sink.run_dir(RUN) / "ledger.jsonl"
+        ledger.write_bytes(ledger.read_bytes() + b"torn")
+        with self.assertRaises(Exception):
+            self.add(path)
+        self.assertEqual(archive.read_bytes(), before)
+        self.assertEqual([f.name for f in archive.parent.iterdir()], [archive.name], "a staged file was left")
+
+    def test_a_transcript_inside_the_repo_gets_a_warning(self):
+        inside = self.root / "raw.jsonl"
+        inside.write_text("\n".join(transcript_lines()) + "\n")
+        self.assertIn("inside the repo", self.add(inside).warning)
+
+    def test_location_under_home_is_written_with_a_tilde(self):
+        home = Path.home().resolve()
+        folder = Path(tempfile.mkdtemp(dir=home if os.access(home, os.W_OK) else None))
+        self.addCleanup(shutil.rmtree, folder)
+        path = folder / "bin.jsonl"
+        path.write_bytes(b"\xff\n")
+        location = self.add(path).entry.data["location"]
+        if folder.resolve().is_relative_to(home):
+            self.assertTrue(location.startswith("~/"), location)
+            self.assertNotIn(str(home), location)
+
     def test_unconfirmed_redaction_keeps_the_transcript_out_and_records_where_it_is(self):
         key = "sk-" + "ant-" + "k" * 30
-        bad = json.dumps({key: 1}).replace("s", "\\u0073", 1)  # a secret in a key, escaped
+        bad = '{"torn": "\\u0073' + key[1:]  # escaped, on a line that isn't JSON
         path = self.transcript(transcript_lines(bad))
         result = self.add(path)
         self.assertFalse(result.archived)
         d = result.entry.data
         self.assertEqual(d["location"], str(path.resolve()))
-        self.assertIn("survived", d["reason"])
+        self.assertIn("decoded view", d["reason"])
         self.assertNotIn("path", d)
         self.assertFalse((self.sink.run_dir(RUN) / "sessions").exists())
         self.assertNotIn("k" * 30, (self.sink.run_dir(RUN) / "ledger.jsonl").read_text())
@@ -155,6 +216,12 @@ class AppendRedactionTest(unittest.TestCase):
         self.assertNotIn("Z" * 40, line)
         self.assertEqual(entry.summary, "rotated [REDACTED:anthropic_key]")
         self.assertEqual(entry.data["n"], 2)
+
+    def test_a_secret_in_a_data_key_never_reaches_the_ledger(self):
+        key = "sk-" + "ant-api03-" + "A" * 30
+        with self.assertRaises(Exception):
+            append(self.sink, RUN, actor=AGENT, type=EntryType.DECISION, summary="s", why="w", data={key: 1})
+        self.assertNotIn("A" * 30, (self.sink.run_dir(RUN) / "ledger.jsonl").read_text())
 
     def test_init_redacts_why(self):
         root = Path(tempfile.mkdtemp())
@@ -226,7 +293,7 @@ class SessionCliTest(unittest.TestCase):
 
     def test_unconfirmed_exits_1_and_says_it_stayed_out(self):
         key = "sk-" + "ant-" + "k" * 30
-        code, _, err = self.session_add(self.file(json.dumps({key: 1}).replace("s", "\\u0073", 1)))
+        code, _, err = self.session_add(self.file('{"torn": "\\u0073' + key[1:]))
         self.assertEqual(code, 1)
         self.assertIn("stays out of git", err)
 

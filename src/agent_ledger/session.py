@@ -40,17 +40,29 @@ def _compress(data: bytes) -> bytes:
     return gzip.compress(data, compresslevel=9, mtime=0)
 
 
-def _write_atomic(folder: Path, name: str, data: bytes) -> None:
+def _stage(folder: Path, name: str, data: bytes) -> Path:
+    """Write `data` to a temporary file in `folder`, synced; the caller renames it into place."""
     fd, tmp = tempfile.mkstemp(dir=folder, prefix=f".{name}.", suffix=".tmp")
     try:
+        os.fchmod(fd, 0o644)  # mkstemp makes 0600; an archive is an ordinary repo file
         with os.fdopen(fd, "wb") as f:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, folder / name)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
+    return Path(tmp)
+
+
+def _where(path: Path) -> str:
+    """A transcript's location for the ledger: under the home folder it is written `~/...`, so
+    the committed entry doesn't carry the user name or machine layout."""
+    path = path.resolve()
+    try:
+        return "~/" + path.relative_to(Path.home().resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _sessions_dir(sink: RepoSink, run_id: str) -> Path:
@@ -86,18 +98,30 @@ def add_session(
     where the raw transcript is instead, and `archived` is False.
     """
     if session_id is None:
-        session_id = transcript.name.split(".")[0]
+        session_id = transcript.stem  # x.one.jsonl and x.two.jsonl stay apart
     if not SESSION_ID_RE.fullmatch(session_id) or ".." in session_id:
         raise LedgerError(f"bad session id {session_id!r}: use letters, digits, '.', '_' and '-'")
+    if redactor.redact(session_id).text != session_id:
+        raise LedgerError(f"session id {session_id!r} looks like a secret to the redactor; pass --session")
     raw = transcript.read_bytes()
     raw_sha = _sha256(raw)
+    folder = sink.run_dir(run_id) / SESSIONS_DIR
+    name = f"{session_id}.jsonl.gz"
+    rel = (folder / name).relative_to(root) if root is not None else folder / name
+
+    warnings = []
+    if root is not None and transcript.resolve().is_relative_to(root.resolve()):
+        warnings.append(f"the raw transcript {transcript} is inside the repo; keep it out of git")
 
     previous = _latest(sink, run_id, session_id)  # also verifies the chain before any write
-    if previous is not None and previous.data.get("raw_sha256") == raw_sha:
-        return SessionResult(previous, bool(previous.data.get("archived")), new=False)
+    if (previous is not None and previous.data.get("archived") is True
+            and previous.data.get("raw_sha256") == raw_sha
+            and previous.data.get("patterns_sha256") == redactor.fingerprint
+            and (folder / name).is_file()):
+        return SessionResult(previous, True, new=False, warning="; ".join(warnings) or None)
 
-    data: dict[str, Any] = {"session_id": session_id, "raw_sha256": raw_sha, "raw_bytes": len(raw)}
-    warning = None
+    data: dict[str, Any] = {"session_id": session_id, "raw_sha256": raw_sha, "raw_bytes": len(raw),
+                            "patterns_sha256": redactor.fingerprint}
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as e:
@@ -109,27 +133,34 @@ def add_session(
         except Unconfirmed as e:
             reason = str(e)
 
+    staged = None
     if reason is not None:
-        data.update(archived=False, location=str(transcript.resolve()), reason=reason)
+        data.update(archived=False, location=_where(transcript), reason=reason)
         summary = f"Session {session_id} not archived: redaction couldn't be confirmed"
         why = "A transcript whose redaction can't be confirmed stays out of git (S3)"
     else:
+        if redactor.redact(rel.as_posix()).text != rel.as_posix():
+            raise LedgerError(f"archive path {rel} looks like a secret to the redactor; rename the run or session")
         body = redacted.text.encode("utf-8")
         archive = _compress(body)
-        folder = _sessions_dir(sink, run_id)
-        name = f"{session_id}.jsonl.gz"
-        _write_atomic(folder, name, archive)
-        rel = folder / name
-        if root is not None:
-            rel = rel.relative_to(root)
+        staged = _stage(_sessions_dir(sink, run_id), name, archive)
         data.update(archived=True, path=rel.as_posix(), redacted_sha256=_sha256(body),
                     redactions=dict(sorted(redacted.counts.items())))
         total = sum(redacted.counts.values())
         summary = f"Session {session_id} archived, {total} redaction{'s' if total != 1 else ''}"
         why = "Archived on pause or close so the run's work can be reviewed later (S3)"
         if len(archive) > LFS_OVER_BYTES:
-            warning = (f"{rel} is {len(archive) // (1024 * 1024)} MB compressed, over the 20 MB "
-                       f"LFS threshold; it isn't routed to Git LFS yet")
-    entry = append(sink, run_id, actor=actor, type=EntryType.SESSION, summary=summary, why=why,
-                   evidence=[data["path"]] if data["archived"] else [], data=data, redactor=redactor)
-    return SessionResult(entry, data["archived"], new=True, warning=warning)
+            warnings.append(f"{rel} is {len(archive) // (1024 * 1024)} MB compressed, over the 20 MB "
+                            f"LFS threshold; it isn't routed to Git LFS yet")
+    # The entry goes first, so a failed append leaves the previous archive untouched. A crash
+    # between the two leaves an entry with no file; adding again redoes the file.
+    try:
+        entry = append(sink, run_id, actor=actor, type=EntryType.SESSION, summary=summary, why=why,
+                       evidence=[data["path"]] if staged else [], data=data, redactor=redactor)
+    except BaseException:
+        if staged:
+            staged.unlink(missing_ok=True)
+        raise
+    if staged:
+        os.replace(staged, folder / name)
+    return SessionResult(entry, staged is not None, new=True, warning="; ".join(warnings) or None)
