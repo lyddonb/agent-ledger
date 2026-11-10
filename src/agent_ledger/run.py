@@ -1,6 +1,7 @@
 """Starting a run and appending to it: the operations behind `ledger init` and `ledger append`."""
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -82,6 +83,7 @@ def redact_fields(redactor: Redactor, fields: Mapping[str, Any]) -> tuple[dict[s
     Raises LedgerError when redaction can't be confirmed, so nothing unconfirmed is written."""
     try:
         clean, counts = redactor.redact_value(dict(fields))
+        redactor.confirm(json.dumps(clean, ensure_ascii=False))
     except Unconfirmed as e:
         raise LedgerError(f"refusing: {e}") from None
     return clean, counts

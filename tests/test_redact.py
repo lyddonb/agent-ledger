@@ -66,7 +66,22 @@ def _aws_secret(rng):
     return f"aws_secret_access_key = {value}", value
 
 
+def _basic(rng):
+    value = rand(rng, 24, ALNUM + "+/") + "=="
+    return f"Authorization: Basic {value}", value[:20]
+
+
+def _quoted_password(rng):
+    value = rng.choice(["hunter2", "abc", "correct horse battery staple", "p@ss w0rd!"])
+    marker = rand(rng, 6)  # makes each planted value unique so the check can't hit other text
+    value = f"{value}{marker}"
+    key = rng.choice(["password", "PGPASSWORD", "secret", "client_secret"])
+    return f'{key}="{value}"', value
+
+
 CORPUS = {
+    "basic_auth": _basic,
+    "quoted_password": _quoted_password,
     "private_key": _pem,
     "anthropic_key": _with_tail("sk-" + "ant-api03-", 40, ALNUM + "_-"),
     "openai_key": _with_tail("sk-" + "proj-", 40, ALNUM + "_-"),
@@ -179,6 +194,58 @@ class PlantedSecretTest(unittest.TestCase):
         self.assertEqual(seen, {p.name for p in BUILTIN})
 
 
+class EscapingTest(unittest.TestCase):
+    """Text escaped more than once: a transcript quoted inside a transcript, PHP-style slashes."""
+
+    def test_a_transcript_line_quoted_inside_another_survives_nothing(self):
+        pw = "hunter2" + "Hunter2x"
+        inner = json.dumps({"SecretString": json.dumps({"password": pw})})
+        line = json.dumps({"tool_result": json.dumps({"content": inner})})
+        out = Redactor().redact_transcript(line).text
+        self.assertFalse(survives(pw, out), out)
+
+    def test_escaped_slashes_do_not_hide_urls(self):
+        for raw, secret in [("postgres:\\/\\/admin:" + "s3cr3tpassw0rd@db.internal/x", "s3cr3tpassw0rd"),
+                            ("https:\\/\\/hooks.slack.com\\/services\\/T0\\/B0\\/" + "abcdEFGH1234", "abcdEFGH1234")]:
+            line = '{"out":"' + raw + '"}'
+            with self.subTest(raw=raw):
+                self.assertFalse(survives(secret, Redactor().redact_transcript(line).text))
+
+    def test_a_secret_in_a_key_is_redacted(self):
+        key = "sk-" + "ant-api03-" + "A" * 30
+        clean, _ = Redactor().redact_value({"data": {key: 1}})
+        self.assertNotIn("A" * 30, json.dumps(clean))
+
+    def test_one_stray_begin_line_does_not_swallow_the_lines_after_it(self):
+        lines = [json.dumps({"t": "the header is -----BEGIN PRIVATE KEY----- by convention"}),
+                 json.dumps({"t": "keep me"}),
+                 json.dumps({"t": "and it ends -----END PRIVATE KEY-----"})]
+        out = Redactor().redact_transcript("\n".join(lines)).text.split("\n")
+        self.assertEqual(len(out), 3)
+        self.assertEqual(out[1], lines[1])
+
+    def test_redacted_json_lines_still_parse(self):
+        rng = random.Random(21)
+        for _ in range(200):
+            secret, _ = rng.choice(list(CORPUS.values()))(rng)
+            text = rng.choice(["grep '-----BEGIN PRIVATE KEY-----' \"a\" b", secret + '\\"', '\\' + secret,
+                               f'echo "{secret}" > f', "x -----BEGIN RSA PRIVATE KEY----- \\"])
+            line = json.dumps({"c": text, "d": [secret, {"e": text}]})
+            out = Redactor().redact_transcript(line).text
+            json.loads(out)
+
+    def test_url_pattern_is_linear_on_dotted_runs(self):
+        import time
+        text = "a." * 200_000
+        start = time.perf_counter()
+        Redactor().redact(text)
+        self.assertLess(time.perf_counter() - start, 2.0)
+
+    def test_a_policy_pattern_that_matches_inside_a_placeholder_is_fine(self):
+        out = Redactor([r"[A-Z]{8}"]).redact("key " + "sk-" + "ant-" + "q" * 30 + " and ABCDEFGH")
+        self.assertNotIn("ABCDEFGH", out.text)
+
+
 class OrdinaryTextTest(unittest.TestCase):
     def test_text_without_secrets_is_unchanged(self):
         r = Redactor()
@@ -189,7 +256,9 @@ class OrdinaryTextTest(unittest.TestCase):
 
     def test_ledger_shaped_text_is_left_alone(self):
         r = Redactor()
-        for text in ["commit 0ad83b2", "a" * 64, "input_tokens: 123456789", "see src/agent_ledger/run.py:42",
+        for text in [".audit/runs/2026-10-18-risk-management-foundation/ledger.jsonl",
+                     "disk-usage-analysis-session-one", "task-force-review-for-the-quarter-2026",
+                     "commit 0ad83b2", "a" * 64, "input_tokens: 123456789", "see src/agent_ledger/run.py:42",
                      "max_tokens=4096", "the token budget is 8000000"]:
             self.assertEqual(r.redact(text).text, text)
 
@@ -197,8 +266,8 @@ class OrdinaryTextTest(unittest.TestCase):
 class RefusalTest(unittest.TestCase):
     def test_a_line_it_cannot_clean_is_refused(self):
         # A secret split by a JSON escape inside an object key: values get redacted, keys don't.
-        key = "sk-" + "ant-" + "k" * 30
-        line = json.dumps({key: 1}).replace("s", "\\u0073", 1)
+        # An escaped secret on a line that isn't JSON (a torn last line) can't be rebuilt.
+        line = 'torn {"x": "\\u0073k-' + 'ant-' + 'k' * 30
         with self.assertRaises(Unconfirmed):
             Redactor().redact_transcript(line)
 
@@ -237,9 +306,18 @@ class PolicyFileTest(unittest.TestCase):
         self.assertEqual(read_policy_patterns(self.write("security:\n  redact_patterns: []\n")), [])
         self.assertEqual(read_policy_patterns(self.write("version: 1\ngates: [deploy]\n")), [])
 
-    def test_a_key_outside_security_is_ignored(self):
-        p = self.write("other:\n  redact_patterns:\n    - 'x'\nsecurity:\n  redact_patterns: []\n")
-        self.assertEqual(read_policy_patterns(p), [])
+    def test_a_mention_it_did_not_parse_is_an_error(self):
+        for text in ["other:\n  redact_patterns:\n    - 'x'\n",
+                     "other:\n  redact_patterns:\n    - 'x'\nsecurity:\n  redact_patterns: []\n",
+                     'security:\n  "redact_patterns":\n    - \'x\'\n',
+                     "security: {redact_patterns: ['x']}\n",
+                     "security:\n  redact_patterns: []\n  redact_patterns:\n    - 'x'\n"]:
+            with self.subTest(text=text), self.assertRaises(PolicyError):
+                read_policy_patterns(self.write(text))
+
+    def test_a_byte_order_mark_is_read_through(self):
+        p = self.write("\ufeffsecurity:\n  redact_patterns:\n    - 'acme'\n")
+        self.assertEqual(read_policy_patterns(p), ["acme"])
 
     def test_shapes_it_cannot_read_are_errors_not_skipped(self):
         for text in ["security:\n  redact_patterns: ['a', 'b']\n",
