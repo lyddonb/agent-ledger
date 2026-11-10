@@ -41,7 +41,7 @@ class CliSurfaceTest(unittest.TestCase):
 
     def test_every_unbuilt_command_is_an_honest_stub(self):
         stubs = set(cli.COMMANDS) - set(cli.HANDLERS)
-        self.assertEqual(stubs, {"seal", "session", "charter", "import-tsv"})
+        self.assertEqual(stubs, {"seal", "charter", "import-tsv"})
         for name in stubs:
             with self.subTest(name):
                 code, _, err = run_cli(name)

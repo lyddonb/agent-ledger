@@ -16,7 +16,9 @@ from typing import Callable, Mapping
 from . import __version__
 from ._canon import CanonError, parse_value
 from .entry import Actor, EntryError, EntryType, _actor_from_wire
+from .redact import PolicyError, Redactor, policy_patterns
 from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, utc_now
+from .session import add_session
 from .sink import ChainBroken, LedgerError
 from .verify import Broken, Verified, verify_run
 
@@ -27,7 +29,7 @@ EXIT_ERROR = 2   # usage error, unreadable input, or a command that isn't built 
 # subcommand -> (one-line help, spec that defines it)
 COMMANDS: dict[str, tuple[str, str]] = {
     "init": ("start a run: create its folder and genesis entry", "docs/specs/S3-audit-ledger.md"),
-    "append": ("chain and write one ledger entry (redaction comes in M0 unit 3)", "docs/specs/S3-audit-ledger.md"),
+    "append": ("redact, chain and write one ledger entry", "docs/specs/S3-audit-ledger.md"),
     "verify": ("check one run's hash chain", "docs/specs/S3-audit-ledger.md"),
     "show": ("print a run's ledger as a table", "docs/specs/S3-audit-ledger.md"),
     "seal": ("close a run's chain and anchor it in INDEX.jsonl", "docs/specs/S3-audit-ledger.md"),
@@ -108,8 +110,27 @@ def _add_root_arg(p: argparse.ArgumentParser) -> None:
                    help="the repo root holding .audit/ (default: the nearest folder with .git)")
 
 
+def _root(ns: argparse.Namespace) -> Path:
+    return ns.root if ns.root is not None else find_root(Path.cwd())
+
+
 def _sink(ns: argparse.Namespace):
-    return repo_sink(ns.root if ns.root is not None else find_root(Path.cwd()))
+    return repo_sink(_root(ns))
+
+
+def _add_redact_arg(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--redact-pattern", action="append", default=[], metavar="REGEX",
+                   help="a Python regex to redact, added to the built-in secret patterns and the "
+                        "policy's security.redact_patterns; repeat for more")
+
+
+def _redactor(ns: argparse.Namespace) -> Redactor:
+    """Built-in patterns, plus ~/.agents/policy.yaml and the repo's .agents/policy.yaml, plus
+    --redact-pattern. An unreadable policy is an error, never skipped."""
+    try:
+        return Redactor([*policy_patterns(_root(ns)), *ns.redact_pattern])
+    except PolicyError as e:
+        raise LedgerError(str(e)) from None
 
 
 def _guard(name: str, ns: argparse.Namespace, body: Callable[[], int]) -> int:
@@ -130,6 +151,7 @@ def _add_init_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--date", type=_day, default=None, help="the run id's date (default: today in UTC, matching ts)")
     p.add_argument("--actor", type=_actor, required=True, help=ACTOR_HELP)
     p.add_argument("--why", default="Run started with `ledger init`", help="one line: why the run exists")
+    _add_redact_arg(p)
     _add_root_arg(p)
 
 
@@ -137,7 +159,7 @@ def _init(ns: argparse.Namespace) -> int:
     def body() -> int:
         sink = _sink(ns)
         run_id = run_id_for(ns.slug, ns.date or utc_now().date())
-        entry = init_run(sink, run_id, actor=ns.actor, why=ns.why)
+        entry = init_run(sink, run_id, actor=ns.actor, why=ns.why, redactor=_redactor(ns))
         print(f"started {run_id}: {sink.run_dir(run_id) / 'ledger.jsonl'} seq {entry.seq} {entry.hash}")
         return EXIT_OK
     return _guard("init", ns, body)
@@ -152,13 +174,15 @@ def _add_append_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--evidence", action="append", default=[],
                    help="a pointer (commit, PR, path:line, hash); repeat for more")
     p.add_argument("--data", type=_data, default=None, help="type-specific fields as a JSON object")
+    _add_redact_arg(p)
     _add_root_arg(p)
 
 
 def _append(ns: argparse.Namespace) -> int:
     def body() -> int:
         entry = append(_sink(ns), ns.run, actor=ns.actor, type=EntryType(ns.type),
-                       summary=ns.summary, why=ns.why, evidence=ns.evidence, data=ns.data)
+                       summary=ns.summary, why=ns.why, evidence=ns.evidence, data=ns.data,
+                       redactor=_redactor(ns))
         print(f"appended {entry.run_id} seq {entry.seq} {entry.hash}")
         return EXIT_OK
     return _guard("append", ns, body)
@@ -210,12 +234,52 @@ def _show(ns: argparse.Namespace) -> int:
     return _guard("show", ns, body)
 
 
+def _add_session_args(p: argparse.ArgumentParser) -> None:
+    sub = p.add_subparsers(dest="session_command", metavar="ACTION", required=True)
+    a = sub.add_parser("add", help="redact, compress and archive a transcript, then record it",
+                       description="Redact a session transcript, store it as "
+                                   ".audit/runs/<run>/sessions/<session>.jsonl.gz and append a "
+                                   "`session` entry with the raw and redacted hashes. If redaction "
+                                   "can't be confirmed, nothing is stored, the entry records where "
+                                   "the transcript is, and the exit code is 1.")
+    a.add_argument("transcript", type=Path, metavar="FILE", help="the transcript (JSON lines, UTF-8)")
+    a.add_argument("--run", required=True, metavar="RUN_ID", help="the run the session worked on")
+    a.add_argument("--actor", type=_actor, required=True, help=ACTOR_HELP)
+    a.add_argument("--session", default=None, metavar="ID",
+                   help="the session id (default: the file name up to its first dot)")
+    _add_redact_arg(a)
+    _add_root_arg(a)
+
+
+def _session(ns: argparse.Namespace) -> int:
+    def body() -> int:
+        root = _root(ns)
+        r = add_session(repo_sink(root), ns.run, ns.transcript, actor=ns.actor,
+                        redactor=_redactor(ns), session_id=ns.session, root=root)
+        d = r.entry.data
+        if not r.new:
+            print(f"unchanged: {d['session_id']} already recorded at seq {r.entry.seq}")
+        if r.warning:
+            print(f"warning: {r.warning}", file=sys.stderr)
+        if not r.archived:
+            print(f"ledger session add: not archived: {d['reason']}; recorded its location at seq "
+                  f"{r.entry.seq} (the transcript stays out of git)", file=sys.stderr)
+            return EXIT_FAILED
+        if r.new:
+            counts = ", ".join(f"{k} {v}" for k, v in d["redactions"].items()) or "none"
+            print(f"archived {d['session_id']}: {d['path']} (redactions: {counts}); "
+                  f"seq {r.entry.seq} {r.entry.hash}")
+        return EXIT_OK
+    return _guard("session add", ns, body)
+
+
 # subcommand -> (add its arguments, run it). A command is implemented iff it is here.
 HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[argparse.Namespace], int]]] = {
     "init": (_add_init_args, _init),
     "append": (_add_append_args, _append),
     "verify": (_add_verify_args, _verify),
     "show": (_add_show_args, _show),
+    "session": (_add_session_args, _session),
 }
 
 
