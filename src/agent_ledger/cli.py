@@ -17,9 +17,11 @@ from . import __version__
 from ._canon import CanonError, parse_value
 from .entry import Actor, EntryError, EntryType, _actor_from_wire
 from .redact import PolicyError, Redactor, policy_patterns
-from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, utc_now
+from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, seal_run, utc_now
+from ._git import GitError
+from .repo_verify import verify_repo
 from .session import add_session
-from .sink import ChainBroken, LedgerError
+from .sink import ChainBroken, IndexBrokenError, LedgerError
 from .verify import Broken, Verified, verify_run
 
 EXIT_OK = 0
@@ -30,7 +32,7 @@ EXIT_ERROR = 2   # usage error, unreadable input, or a command that isn't built 
 COMMANDS: dict[str, tuple[str, str]] = {
     "init": ("start a run: create its folder and genesis entry", "docs/specs/S3-audit-ledger.md"),
     "append": ("redact, chain and write one ledger entry", "docs/specs/S3-audit-ledger.md"),
-    "verify": ("check one run's hash chain", "docs/specs/S3-audit-ledger.md"),
+    "verify": ("check every run, the index and seals, or one run's chain", "docs/specs/S3-audit-ledger.md"),
     "show": ("print a run's ledger as a table", "docs/specs/S3-audit-ledger.md"),
     "seal": ("close a run's chain and anchor it in INDEX.jsonl", "docs/specs/S3-audit-ledger.md"),
     "session": ("archive a redacted session transcript", "docs/specs/S3-audit-ledger.md"),
@@ -45,11 +47,21 @@ CHAIN_ONLY_NOTE = (
 
 
 def _add_verify_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("run_folder", metavar="RUN_FOLDER", type=Path,
-                   help="a run folder, such as .audit/runs/2026-10-18-m0-foundation")
+    p.add_argument("run_folder", metavar="RUN_FOLDER", type=Path, nargs="?", default=None,
+                   help="check only this run folder's chain, such as .audit/runs/2026-10-18-m0-foundation "
+                        "(default: every run in the repo, INDEX.jsonl and the seals)")
+    p.add_argument("--base", metavar="REF", default=None,
+                   help="also check that every ledger and INDEX.jsonl at REF (such as origin/main) "
+                        "is unchanged here apart from lines added at the end")
+    _add_root_arg(p)
 
 
 def _verify(ns: argparse.Namespace) -> int:
+    if ns.run_folder is None:
+        return _verify_repo(ns)
+    if ns.base is not None:
+        print("ledger verify: --base checks the whole repo; leave out RUN_FOLDER", file=sys.stderr)
+        return EXIT_ERROR
     try:
         report = verify_run(ns.run_folder)
     except OSError as e:
@@ -64,6 +76,30 @@ def _verify(ns: argparse.Namespace) -> int:
     assert isinstance(report, Broken)
     _print_problems(report, path)
     return EXIT_FAILED
+
+
+def _verify_repo(ns: argparse.Namespace) -> int:
+    try:
+        root = _root(ns)
+        report = verify_repo(root, ns.base)
+    except (GitError, LedgerError, OSError) as e:
+        print(f"ledger verify: {e}", file=sys.stderr)
+        return EXIT_ERROR
+    for run_id, run in report.runs.items():
+        if isinstance(run, Broken):
+            _print_problems(run, Path(".audit/runs") / run_id / "ledger.jsonl")
+    for f in report.findings:
+        where = f"{f.path}:{f.problem.line}" if f.problem.line else f.path
+        print(f"{where}: {f.problem.kind.value}: {f.problem.message}")
+    broken = sum(isinstance(r, Broken) for r in report.runs.values())
+    if not report.ok:
+        print(f"FAILED: {broken} broken run{'s' if broken != 1 else ''}, {len(report.findings)} other problems")
+        return EXIT_FAILED
+    since = f"; merged lines unchanged since {ns.base} ({report.base[:12]})" if report.base else ""
+    print(f"ok: {len(report.runs)} runs, {report.sealed} sealed, {report.index_lines} indexed{since}")
+    if not report.base:
+        print("note: without --base, lines cut from or rewritten in merged ledgers aren't checked")
+    return EXIT_OK
 
 
 def _print_problems(report: Broken, path: Path) -> None:
@@ -140,6 +176,11 @@ def _guard(name: str, ns: argparse.Namespace, body: Callable[[], int]) -> int:
     except ChainBroken as e:
         print(f"ledger {name}: refusing: the ledger fails verify", file=sys.stderr)
         _print_problems(e.report, _sink(ns).run_dir(e.report.run_id) / "ledger.jsonl")
+        return EXIT_FAILED
+    except IndexBrokenError as e:
+        print(f"ledger {name}: refusing: .audit/INDEX.jsonl fails verify", file=sys.stderr)
+        for p in e.report.problems:
+            print(f".audit/INDEX.jsonl:{p.line}: {p.kind.value}: {p.message}")
         return EXIT_FAILED
     except (LedgerError, EntryError, OSError) as e:
         print(f"ledger {name}: {e}", file=sys.stderr)
@@ -273,6 +314,31 @@ def _session(ns: argparse.Namespace) -> int:
     return _guard("session add", ns, body)
 
 
+def _add_seal_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("run_id", metavar="RUN_ID", help="the run to seal")
+    p.add_argument("--actor", type=_actor, required=True, help=ACTOR_HELP)
+    p.add_argument("--why", default="", help="one line: why the run is done (default: a standard reason)")
+    _add_root_arg(p)
+
+
+def _seal(ns: argparse.Namespace) -> int:
+    def body() -> int:
+        root = _root(ns)
+        try:
+            r = seal_run(repo_sink(root), root, ns.run_id, actor=ns.actor, why=ns.why)
+        except GitError as e:
+            raise LedgerError(str(e)) from None
+        if r.new:
+            print(f"sealed {ns.run_id} at seq {r.entry.seq}, commit {r.entry.data['commit'][:12]}; "
+                  f"indexed in .audit/INDEX.jsonl. Commit both files.")
+        elif r.indexed:
+            print(f"{ns.run_id} was already sealed (seq {r.entry.seq}); added its line to .audit/INDEX.jsonl")
+        else:
+            print(f"{ns.run_id} is already sealed (seq {r.entry.seq}) and indexed; nothing to do")
+        return EXIT_OK
+    return _guard("seal", ns, body)
+
+
 # subcommand -> (add its arguments, run it). A command is implemented iff it is here.
 HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[argparse.Namespace], int]]] = {
     "init": (_add_init_args, _init),
@@ -280,6 +346,7 @@ HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[a
     "verify": (_add_verify_args, _verify),
     "show": (_add_show_args, _show),
     "session": (_add_session_args, _session),
+    "seal": (_add_seal_args, _seal),
 }
 
 

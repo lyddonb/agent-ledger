@@ -9,6 +9,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | H3 | Turn on Actions and protect `main` (no force-push) | Done 2026-11-08: Actions on; main requires a PR and the three test checks, admins included, no force-push or deletion. |
 | H4 | Approve the M0 charter | Done 2026-11-08 |
 | H5 | Pick the project for the M0 gate run | Needed by M0 unit 9 |
+| H6 | Allow only merge commits on `main` (turn off squash and rebase merging) | Done 2026-11-10: squash and rebase merging off, merge commits on |
 
 ### H1. Confirm the name
 Renaming is cheap until the repo is public and `uses: lyddonb/agent-ledger@v1` appears in other repos' CI. Rename the folder, `pyproject.toml`, the README and the specs if you want something else.
@@ -32,3 +33,11 @@ Read [.audit/runs/2026-10-18-m0-foundation/charter.md](.audit/runs/2026-10-18-m0
 
 ### H5. Pick the gate-run project
 M0's gate is one real tier 2 run in a real project. Choose which project and task, ideally one with a `verify-<app>` skill.
+
+### H6. Allow only merge commits — Done 2026-11-10
+A seal names a commit on the PR branch. A squash or rebase merge rewrites the branch, so that commit never reaches `main`, and `ledger verify` reports `seal-commit` on every sealed run merged that way. In the repo's Settings, under Pull Requests, untick "Allow squash merging" and "Allow rebase merging", or run:
+
+```bash
+gh api -X PATCH repos/lyddonb/agent-ledger -f allow_squash_merge=false -f allow_rebase_merge=false
+```
+Every project that keeps `.audit/` needs the same setting; unit 7's agentfiles status can check it later.

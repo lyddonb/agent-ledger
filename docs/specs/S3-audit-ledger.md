@@ -84,6 +84,31 @@ Each line is linked to the previous line's stored `seq` and `hash`, so a problem
 
 A chain on its own can't detect entries cut from the end, a suffix rewritten with recomputed hashes, or a whole file replaced by another valid chain: the hash has no secret. Seals, `INDEX.jsonl` and `verify --base` (M0 unit 4) close those gaps by anchoring the head in git history.
 
+### Seals and INDEX.jsonl
+
+- **Seal entry.** `ledger seal <run-id>` appends a `seal` entry. Its `prev` is the run's final hash, and `data.commit` (also its one evidence pointer) is HEAD's full commit id. It refuses unless the ledger at HEAD is byte for byte the file on disk, so the commit really holds the head the seal follows. A sealed run takes no more entries; `append` refuses, and a hand-made `seal` entry is refused too.
+- **INDEX.jsonl.** Then the run gets one line in `.audit/INDEX.jsonl`: the canonical JSON of `{v, seq, ts, run_id, seal, commit, prev, hash}`, where `seal` is the seal entry's hash and `prev` chains from `genesis:index`, with the same canonical form, framing and hashing as a ledger. The line is appended under the same `flock` rule as a ledger, so concurrent seals make one chain. A run appears at most once (`duplicate-seal`).
+- **Merges.** A seal names a branch commit, so it survives only a merge commit. A squash or rebase merge drops that commit and verify reports `seal-commit`; protect `main` to allow merge commits only. A process killed while appending to `INDEX.jsonl` leaves a torn last line that every later seal refuses, as with a ledger; delete that partial line (it was never committed), then run `ledger seal` again. Two branches that each seal a run conflict on `INDEX.jsonl`: take the base branch's copy, run `ledger seal <run-id>` again (it indexes a sealed run that has no line), and commit.
+
+### What `ledger verify` over the repo detects
+
+`ledger verify` with no run folder checks every run under `.audit/runs`, `INDEX.jsonl`, and how they agree. `--base REF` adds the append-only check. Exit 0 verified, 1 failed, 2 a usage, read or git error (such as a bad ref).
+
+| Change | Reported | Needs |
+|---|---|---|
+| Any break in one run's chain | As in the table above | |
+| An entry after a seal | `after-seal` on that line | |
+| A sealed run with no index line | `unindexed-seal` | |
+| An index line for a run that isn't sealed, or naming another seal or commit | `index-mismatch` on that line | |
+| A seal whose commit isn't in HEAD's history, or doesn't hold that ledger with the head the seal follows | `seal-commit` | git |
+| A changed or cut line, or a deleted ledger, in a file that exists at the base | `base-changed` on the first differing line | `--base` |
+| Entries cut from the end of a merged run, or a merged suffix rewritten with recomputed hashes | `base-changed` | `--base` |
+| A merged ledger replaced by another valid chain | `base-changed` | `--base` |
+| A symlink or submodule anywhere in `.audit` (at HEAD, at the base, or on disk), or a symlinked run folder | `not-a-file` | |
+| A ledger or `INDEX.jsonl` on disk that isn't the committed file (an uncommitted edit, or a `.gitattributes` conversion) | `uncommitted` | `--base` |
+
+The base check covers every `ledger.jsonl` under `.audit/runs` and `.audit/INDEX.jsonl` that git lists at the base, and it reads both sides as git objects (the base commit's blobs against HEAD's, by `ls-tree` with modes and `cat-file`), never the working tree. So a PR can't show the check one set of bytes and merge another: not by swapping a folder for a symlink, which would hide merged files from the next PR's check, and not by a `.gitattributes` encoding or line-ending conversion, which changes the committed bytes while the checkout looks the same. With `--base`, verify therefore checks committed work: commit first. Without `--base`, verify says so, since merged lines can then be cut or rewritten unnoticed. In CI the checkout needs full history (`fetch-depth: 0`) for the seal and base checks.
+
 ## The ledger CLI
 
 `ledger` is a standard-library Python CLI in this repo, installed once per machine (agentfiles installs it) and pinned by version in CI. bstack's show-me-your-work keeps its review steps and calls the CLI instead of `log.sh`.
@@ -92,11 +117,11 @@ A chain on its own can't detect entries cut from the end, a suffix rewritten wit
 |---|---|
 | `ledger init <slug> --actor A [--date D] [--why W]` | Creates the run folder (or uses an existing one) and the first entry, a `state` entry with `data` `{"state": "started"}`, chained to `genesis:<run-id>`. The run id is `<date>-<slug>`; the date defaults to today. Refuses a run that already has a ledger (built in M0 unit 2) |
 | `ledger append --run R --actor A --type T --summary S --why W [--evidence E]... [--data JSON]` | Redacts summary, why, evidence and data (built in M0 unit 3), chains and writes one entry through each configured sink. Refuses a run whose ledger fails verify: exit 1 with the problems, as `verify` prints them (built in M0 unit 2) |
-| `ledger verify [--base origin/main]` | Checks every chain, that existing lines are unchanged relative to the base, and that each seal names a commit in history |
+| `ledger verify [--base origin/main]` | Checks every chain, `INDEX.jsonl` and the seals, and with `--base` that lines at the base are unchanged (built in M0 unit 4) |
 | `ledger verify RUN_FOLDER` | Checks one run's chain (built in M0 unit 1). Exit 0 verified, 1 failed, 2 usage or read error |
 | `ledger show <run-id>` | Prints a readable table, newest last, after verifying the run; a run that fails verify prints the problems instead and exits 1 (built in M0 unit 2) |
 | `ledger session add <file> --run R --actor A [--session ID] [--redact-pattern P]...` | Redacts, compresses and stores a transcript, then appends a `session` entry with both hashes. Exit 0 archived (or unchanged since the last add), 1 not archived because redaction couldn't be confirmed, 2 usage or read error (built in M0 unit 3) |
-| `ledger seal <run-id>` | Writes the `seal` entry (final hash and head commit) and appends it to `INDEX.jsonl` |
+| `ledger seal <run-id> --actor A [--why W]` | Writes the `seal` entry (its `prev` is the final hash; it names the HEAD commit) and appends the run to `INDEX.jsonl`. Re-running it indexes a sealed run that has no line (built in M0 unit 4) |
 | `ledger charter ...` | Charter commands from S1 |
 | `ledger import-tsv <file>` | Converts an old `decisions.tsv` trail into a run |
 
@@ -104,13 +129,13 @@ A chain on its own can't detect entries cut from the end, a suffix rewritten wit
 
 Parallel subagents append through the orchestrating agent, or take a file lock, so a chain never forks. The repo sink takes the lock itself: `write` holds `flock` on `ledger.jsonl` (exclusive to write, shared to read), re-verifies the file, and accepts an entry only if its `seq` and `prev` extend the current head. `append` re-reads the head and re-chains when it loses that race. So any writer, CLI or library, gets one chain. After taking the lock, `write` checks that the file it locked is still the one at `ledger.jsonl` (a `git checkout` replaces the file by rename) and retries if not. Rename doesn't take the lock, so `write` checks again after writing: if the file was replaced mid-write, the entry is reported as not recorded (exit 2), never as success. A write that fails partway is truncated back under the lock. On macOS, `fsync` doesn't force the drive cache (that needs `F_FULLFSYNC`), so an append can still be lost to a power cut. The lock needs `fcntl` (Linux, macOS), so `append` and `show` do too; `init` and `verify` don't. A process killed mid-write still leaves a torn last line, which verify reports and every later append refuses until a person repairs it. `ledger verify` reads without the lock, so run it when no one is appending.
 
-The writer refuses a symlink at `.audit`, `.audit/runs` or the run folder, as verify refuses one at `ledger.jsonl`. `verify` itself still follows a symlinked run folder (M0 unit 1's choice); the `ledger-verify` Action (unit 6) has to refuse one in an untrusted PR. Outside a git repo, `--root` is required.
+The writer refuses a symlink at `.audit`, `.audit/runs` or the run folder, as verify refuses one at `ledger.jsonl`. `ledger verify RUN_FOLDER` still follows a symlinked run folder (M0 unit 1's choice); `ledger verify` over the repo, which the `ledger-verify` Action (unit 6) runs, refuses any symlink in `.audit`. Outside a git repo, `--root` is required.
 
 The CLI does not authenticate `--actor`: anyone who can run `ledger append` can write an entry naming any actor, including a human approval. In M0 the protection is review of the PR that adds the line; signing is not in M0. `ledger show` prints each actor as `kind:id` with non-ASCII escaped, and escapes invisible and combining characters in the text, so one actor can't pass for another on screen.
 
 ## Sinks
 
-Every write goes through a sink interface with two calls, `write(entry)` and `seal(run_id, hash, commit)` (`agent_ledger.sink.Sink`). M0 ships the `repo` sink, which is the chain's source of truth: other sinks mirror entries it has accepted. Its `seal` is built in M0 unit 4. An `s3-object-lock` sink and an `external` ledger sink come in M4, configured in policy `audit.sinks`, with no change to any skill.
+Every write goes through a sink interface with two calls, `write(entry)` and `seal(run_id, hash, commit)` (`agent_ledger.sink.Sink`). M0 ships the `repo` sink, which is the chain's source of truth: other sinks mirror entries it has accepted. Its `seal(run_id, hash, commit)` appends the run's line to `INDEX.jsonl` (M0 unit 4). An `s3-object-lock` sink and an `external` ledger sink come in M4, configured in policy `audit.sinks`, with no change to any skill.
 
 ## Session archive
 
@@ -144,5 +169,5 @@ An imported entry is marked by `data.imported`, an object with `source` (where t
 - [ ] Deleting a line or reordering two lines fails verification.
 - [ ] A planted fake secret in a transcript is redacted before it reaches git; the CI scan finds nothing.
 - [x] Two subagents appending at once produce one valid chain (`tests/test_sink.py` `ConcurrentAppendTest`, M0 unit 2).
-- [ ] A sealed run's `INDEX.jsonl` entry names a commit that exists on `main`.
+- [x] A sealed run's `INDEX.jsonl` entry names a commit that exists on `main` (`tests/test_seal.py`; it needs merge commits, see "Seals and INDEX.jsonl").
 - [ ] Swapping the repo sink for a test sink needs only a policy change.

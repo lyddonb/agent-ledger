@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from . import _git
+from .index import COMMIT_RE, INDEX_FILE
 from .redact import Redactor, Unconfirmed
 from .entry import TS_FORMAT, TS_RE, Actor, ChainHead, Entry, EntryError, EntryType, next_entry
 from .sink import LedgerError, RepoSink, StaleHead
@@ -111,6 +114,8 @@ def append(
     data: Mapping[str, Any] | None = None,
     clock: Clock = utc_now,
     redactor: Redactor | None = None,
+    _sealing: bool = False,
+    _expect_link: str | None = None,
 ) -> Entry:
     """Redact, then chain one entry onto the run's current head and write it.
 
@@ -122,12 +127,71 @@ def append(
     summary, why, evidence, data = fields["summary"], fields["why"], fields["evidence"], fields["data"]
     check_imported(data)
     check_spend(type, data)
+    if type is EntryType.SEAL and not _sealing:
+        raise LedgerError("a seal entry is written by `ledger seal`, which also indexes it")
     for _ in range(APPEND_ATTEMPTS):
-        entry = next_entry(sink.head(run_id), now=clock(), actor=actor, type=type,
+        last = sink.read(run_id).entries[-1]
+        if last.type is EntryType.SEAL:
+            raise LedgerError(f"{run_id} is sealed (seq {last.seq}); a sealed run takes no more entries")
+        if _expect_link is not None and last.head.link != _expect_link:
+            raise LedgerError(f"{run_id}: another entry was appended while sealing; commit it, then seal again")
+        entry = next_entry(last.head, now=clock(), actor=actor, type=type,
                            summary=summary, why=why, evidence=evidence, data=data)
         try:
             sink.write(entry)
             return entry
         except StaleHead:
+            if _expect_link is not None:  # the head moved: chaining onto it would seal a head the commit lacks
+                raise LedgerError(f"{run_id}: another entry was appended while sealing; commit it, then seal again") from None
             continue
     raise LedgerError(f"{run_id}: gave up after {APPEND_ATTEMPTS} attempts; other writers kept appending first")
+
+
+@dataclass(frozen=True)
+class Sealed:
+    entry: Entry
+    new: bool  # False when the run was already sealed; `indexed` says if this call indexed it
+    indexed: bool
+
+
+def seal_run(sink: RepoSink, root: Path, run_id: str, *, actor: Actor, why: str = "", clock: Clock = utc_now) -> Sealed:
+    """Seal a run: write its `seal` entry, chained onto the head committed at HEAD and naming
+    that commit, then add the run to INDEX.jsonl.
+
+    Everything that could stop the index write is checked before the seal entry is written:
+    the index must verify and must not name the run already. The ledger must be committed at
+    HEAD exactly as it is on disk, and the seal is chained onto that committed head or not at
+    all, so the commit always holds the head the seal follows. If the index write still fails
+    (a crash, a full disk), running seal again indexes the sealed run. That is also how a
+    sealed run gets indexed after taking main's INDEX.jsonl in a merge conflict."""
+    last = sink.read(run_id).entries[-1]
+    index = sink.read_index()  # raises when the index fails verify
+    line = next((l for l in index.lines if l.run_id == run_id), None)
+    if last.type is EntryType.SEAL:
+        commit = last.data.get("commit")
+        if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
+            raise LedgerError(f"{run_id}'s seal entry (seq {last.seq}) names no valid commit; it can't be indexed")
+        if line is None:
+            sink.seal(run_id, last.hash, commit, now=clock())
+            return Sealed(last, new=False, indexed=True)
+        if (line.seal, line.commit) != (last.hash, commit):
+            raise LedgerError(f"{INDEX_FILE} line {line.seq} names another seal for {run_id}; take the base "
+                              f"branch's {INDEX_FILE}, then seal again")
+        return Sealed(last, new=False, indexed=False)
+    if line is not None:
+        raise LedgerError(f"{INDEX_FILE} line {line.seq} already names {run_id}, which isn't sealed; take the "
+                          f"base branch's {INDEX_FILE}, then seal again")
+    ledger = sink.run_dir(run_id) / "ledger.jsonl"
+    rel = ledger.relative_to(root).as_posix()
+    commit = _git.resolve(root, "HEAD")
+    committed = _git.file_at(root, commit, rel)
+    if committed is None or committed != ledger.read_bytes():
+        raise LedgerError(f"{rel} has changes that aren't committed at HEAD; commit the ledger, then seal, "
+                          f"so the seal's commit holds the head it names")
+    # The seal's prev is the committed head (the run's final hash); its data names the commit.
+    entry = append(sink, run_id, actor=actor, type=EntryType.SEAL, summary="Run sealed",
+                   why=why or "The run is finished; sealing anchors its head in git history (S3)",
+                   evidence=[commit], data={"commit": commit}, clock=clock, _sealing=True,
+                   _expect_link=last.head.link)
+    sink.seal(run_id, entry.hash, commit, now=clock())
+    return Sealed(entry, new=True, indexed=True)
