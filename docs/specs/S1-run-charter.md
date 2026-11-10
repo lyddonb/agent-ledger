@@ -36,7 +36,22 @@ soc2: {approved_before_build: true, tested: true, independent_review: true, reco
 ---
 ```
 
-Body sections, in order: Goal, Scope and non-scope, Plan (units in order), Gates and rollback, Staffing and why, Guardrails, Security notes, Review plan, Budget and estimate, SOC 2 gaps (if any), Risks (from a short pre-mortem).
+Body sections, in order: Goal, Scope and non-scope, Plan (units in order), Gates and rollback, Staffing and why, Guardrails, Security notes, Review plan, Budget and estimate, SOC 2 gaps (if any), Risks (from a short pre-mortem). A heading may add words after the name, such as `## Risks (pre-mortem)`.
+
+### The `ledger charter` commands (M0 unit 5)
+
+| Command | Does |
+|---|---|
+| `ledger charter new <slug> --title T [--tier N] [--date D]` | Writes the template to `.audit/runs/<run-id>/charter.md`; its `TODO` placeholders fail `check` until filled in. Refuses an existing charter |
+| `ledger charter check <run-id> [--require-approved]` | Lists every problem for the charter's tier with its line, and prints the approval state. Exit 0 complete, 1 problems (or not approved, with `--require-approved`), 2 unreadable |
+| `ledger charter approve <run-id> --actor HUMAN [--quote Q] [--channel C] [--relayed-by AGENT]` | Appends an `approval` entry whose `data.charter_sha256` (and evidence) is the charter's sha256, plus `supersedes` when it replaces an earlier approval. The charter must pass `check` and the run must be started (`ledger init`); the actor must be human. Approving the same bytes again is a no-op |
+| `ledger charter render` | M2 |
+
+**What `check` requires.** Every tier: `run_id` (equal to the folder), `title`, `tier` (1 to 3), `predicate`, a non-empty `scope`, and `gates` holding every default gate from S2 (a charter adds gates, never removes one). Tier 2 and 3 add `budget` (positive `usd`, `tokens`, `max_parallel_agents`, and a `wall_clock` like `90m`, `8h` or `2d`), `estimate` (with `calls`, and no figure over the budget), `staffing` (each with role, tool, model and a positive count), `review` (`lenses` and `decision_review`), `spec_level` (types, schemas, property-tests or model-check), `rollback`, `soc2` (its four keys), and the body sections in order. Tier 3 adds `security` in `review.lenses` and `decision_review: true`. No value may contain `TODO`.
+
+**Approval state.** The ledger is the source of truth: the charter is approved when the latest approval entry names its exact sha256, stale when that approval names an earlier version (the charter was edited, so it is back to draft), and draft otherwise. Approvals written before these commands carry the hash only in evidence (`charter.md sha256 <hex>`); `check` reads that form too.
+
+**The front matter subset.** Charters are read without a YAML library, so the front matter is limited to `key: value` lines; plain scalars (whole numbers, `true`, `false`, `null`, and unquoted text); double- or single-quoted strings; flow lists `[a, b]` and maps `{k: v}`, nested; and a key followed by `  - item` lines, where an item is a value or one `key: value` pair. Comments start with ` #` outside quotes. Anchors, block scalars, nested block maps and tabs are refused with the line, so a field is never read wrong.
 
 ## Lifecycle
 
@@ -72,8 +87,8 @@ A run moves through fixed states, and every move is a ledger entry (S3):
 ## Acceptance criteria
 
 - [ ] beau-mode routes a multi-PR or unattended task to the Large work item playbook.
-- [ ] `ledger charter check` rejects a charter missing any required field for its tier.
-- [ ] Approving writes a ledger entry with the approver and the charter hash; editing afterward forces re-approval.
+- [x] `ledger charter check` rejects a charter missing any required field for its tier (`tests/test_charter.py`).
+- [x] Approving writes a ledger entry with the approver and the charter hash; editing afterward forces re-approval (`tests/test_charter.py`).
 - [ ] A test run reaches a gate, stops only that thread, and resumes after an approval entry.
 - [ ] Close reports planned versus recorded calls and spend.
 - [ ] One real tier 2 run completes end to end with an approved charter.
