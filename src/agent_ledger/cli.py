@@ -420,7 +420,7 @@ def _charter(ns: argparse.Namespace) -> int:
         else:
             print("draft: not approved")
         if problems:
-            print(f"FAILED {ns.run_id}: {len(problems)} problems (tier {charter.fields.get('tier')})")
+            print(f"FAILED {ns.run_id}: {len(problems)} problems")
             return EXIT_FAILED
         print(f"ok {ns.run_id}: tier {charter.fields.get('tier')} charter is complete")
         if ns.require_approved and status.state != "approved":
@@ -429,6 +429,9 @@ def _charter(ns: argparse.Namespace) -> int:
 
     try:
         return _guard(f"charter {ns.charter_command}", ns, body)
+    except RecursionError:
+        print(f"ledger charter {ns.charter_command}: the charter is nested too deeply to read", file=sys.stderr)
+        return EXIT_ERROR
     except CharterError as e:
         print(f"ledger charter {ns.charter_command}: {e}", file=sys.stderr)
         return EXIT_FAILED if ns.charter_command == "approve" else EXIT_ERROR

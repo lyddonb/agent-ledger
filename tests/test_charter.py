@@ -11,7 +11,7 @@ from test_cli import run_cli
 
 from agent_ledger.charter import (DEFAULT_GATES, CharterError, approval_status, approve_charter,
                                   check_charter, new_charter, parse_front_matter, read_charter)
-from agent_ledger.entry import AgentActor, EntryType, HumanActor
+from agent_ledger.entry import AgentActor, EntryError, EntryType, HumanActor
 from agent_ledger.run import append, init_run, repo_sink
 from agent_ledger.sink import LedgerError
 
@@ -78,6 +78,10 @@ class ReaderTest(unittest.TestCase):
             "duplicate key": "a: 1\na: 2",
             "duplicate flow key": "a: {b: 1, b: 2}",
             "tab": "a:\t1",
+            "deep list": "a: " + "[" * 2000 + "]" * 2000,
+            "deep map": "a: " + "{a: " * 2000 + "1" + "}" * 2000,
+            "huge int": "a: " + "9" * 5000,
+            "leading zero": "a: 010",
         }
         for label, text in cases.items():
             with self.subTest(label):
@@ -86,6 +90,11 @@ class ReaderTest(unittest.TestCase):
                 self.assertGreaterEqual(cm.exception.line, 2)
 
     def test_comments_and_quotes(self):
+        fields, _ = parse_front_matter([
+            "f: it's # a comment",
+            'g: "say \\"hi\\" # not a comment"',
+        ], 2)
+        self.assertEqual(fields, {"f": "it's", "g": 'say "hi" # not a comment'})
         fields, _ = parse_front_matter([
             'a: "has # hash" # comment',
             "b: 'it''s'",
@@ -170,11 +179,33 @@ class CheckTest(unittest.TestCase):
             "staffing count": ({"staffing": "[{role: code, tool: x, model: y, count: 0}]"}, "count must be"),
             "placeholder": ({"predicate": '"TODO later"'}, "placeholder"),
             "soc2": ({"soc2": "{tested: true}"}, "soc2 needs"),
+            "placeholder key": ({"rollback": '{TODO: "undo it"}'}, "placeholder"),
+            "other placeholder": ({"predicate": '"tbd"'}, "placeholder"),
+            "bool tier": ({"tier": "true"}, "tier must be"),
+            "zero wall clock": ({"budget": "{usd: 40, tokens: 6000000, wall_clock: 0m, max_parallel_agents: 4}",
+                                 "estimate": "{usd: 1, tokens: 1, wall_clock: 0m, calls: {}}"}, "positive duration"),
+            "bool count": ({"staffing": "[{role: code, tool: x, model: y, count: true}]"}, "count must be"),
+            "bool budget": ({"budget": "{usd: true, tokens: 6000000, wall_clock: 6h, max_parallel_agents: 4}"}, "budget.usd"),
         }
         for label, (front, expect) in cases.items():
             with self.subTest(label):
                 problems = self.check(charter_text(front))
                 self.assertTrue(any(expect in p for p in problems), problems)
+
+    def test_tier_3_with_malformed_lenses_is_a_problem_not_a_crash(self):
+        problems = self.check(charter_text({"tier": "3", "review": "{lenses: 5, decision_review: true}"}))
+        self.assertTrue(any("security lens" in p for p in problems), problems)
+
+    def test_placeholders_in_the_body_are_named(self):
+        text = charter_text().replace("## Plan\n\nText.", "## Plan\n\nTBD after the spike.")
+        self.assertTrue(any("body still has a placeholder" in p for p in self.check(text)))
+
+    def test_headings_hidden_in_code_or_comments_do_not_count(self):
+        hidden = "\n".join(f"## {s}" for s in SECTIONS)
+        for wrap in (f"```\n{hidden}\n```", f"<!--\n{hidden}\n-->"):
+            with self.subTest(wrap=wrap[:3]):
+                problems = self.check(charter_text(sections=[]) + "\n" + wrap + "\n")
+                self.assertTrue(any("## Goal" in p for p in problems), problems)
 
     def test_sections_must_all_be_there_in_order(self):
         missing = self.check(charter_text(sections=SECTIONS[:-1]))
@@ -185,8 +216,17 @@ class CheckTest(unittest.TestCase):
 
     def test_the_template_fails_until_filled(self):
         path = new_charter(self.dir / "runs", RUN, title="Make export retries idempotent", tier=2)
-        problems = [p.message for p in check_charter(read_charter(path), RUN)]
-        self.assertTrue(any("placeholder" in p for p in problems))
+        charter = read_charter(path)
+        flagged = {p.line for p in check_charter(charter, RUN) if "placeholder" in p.message}
+        lines = path.read_text().split("\n")
+        todo_lines = set()
+        for n, line in enumerate(lines, 1):
+            if "TODO" in line.split(" #")[0]:
+                key = n
+                while lines[key - 1].startswith("  - "):  # a list item is reported on its key's line
+                    key -= 1
+                todo_lines.add(key)
+        self.assertEqual(todo_lines - flagged, set(), "every TODO is flagged, rollback included")
         with self.assertRaises(LedgerError):
             new_charter(self.dir / "runs", RUN, title="again", tier=2)
 
@@ -235,7 +275,7 @@ class ApprovalTest(unittest.TestCase):
 
     def test_an_agent_cannot_approve(self):
         init_run(self.sink, RUN, actor=AGENT, why="test")
-        with self.assertRaises(Exception):
+        with self.assertRaises(EntryError):
             approve_charter(self.sink, RUN, actor=AGENT, why="w", quote=None, channel=None,
                             relayed_by=None, append=append)
 
@@ -243,8 +283,28 @@ class ApprovalTest(unittest.TestCase):
         init_run(self.sink, RUN, actor=AGENT, why="test")
         sha = read_charter(self.path).sha256
         append(self.sink, RUN, actor=HUMAN, type=EntryType.APPROVAL, summary="Approved", why="w",
+               evidence=[f"see old note: charter.md sha256 {sha}"])
+        self.assertEqual(self.status().state, "draft", "the legacy form must be the whole pointer")
+        append(self.sink, RUN, actor=HUMAN, type=EntryType.APPROVAL, summary="Approved", why="w",
                evidence=[f"charter.md sha256 {sha}, as committed in abc1234"])
         self.assertEqual(self.status().state, "approved")
+
+    def test_editing_then_reverting_is_approved_again(self):
+        init_run(self.sink, RUN, actor=AGENT, why="test")
+        self.approve()
+        original = self.path.read_bytes()
+        self.path.write_bytes(original + b"\nmore\n")
+        self.assertEqual(self.status().state, "stale")
+        self.path.write_bytes(original)
+        self.assertEqual(self.status().state, "approved")
+
+    def test_a_symlinked_charter_is_refused(self):
+        elsewhere = self.root / "elsewhere.md"
+        elsewhere.write_bytes(self.path.read_bytes())
+        self.path.unlink()
+        self.path.symlink_to(elsewhere)
+        with self.assertRaisesRegex(CharterError, "symlink"):
+            read_charter(self.path)
 
 
 class CharterCliTest(unittest.TestCase):

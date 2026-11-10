@@ -34,6 +34,9 @@ SOC2_KEYS = ("approved_before_build", "tested", "independent_review", "recorded"
 BODY_SECTIONS = ("Goal", "Scope and non-scope", "Plan", "Gates and rollback", "Staffing and why",
                  "Guardrails", "Security notes", "Review plan", "Budget and estimate", "Risks")
 PLACEHOLDER = "TODO"
+_PLACEHOLDER_RE = re.compile(r"\b(?:TODO|TBD|FIXME|XXX)\b", re.IGNORECASE)
+MAX_DEPTH = 16
+MAX_INT_DIGITS = 18
 
 
 class CharterError(ValueError):
@@ -68,7 +71,10 @@ class _Flow:
         while self.i < len(self.s) and self.s[self.i] == " ":
             self.i += 1
 
-    def value(self, stops: str) -> Any:
+    def value(self, stops: str, depth: int = 0) -> Any:
+        if depth > MAX_DEPTH:
+            raise self.fail(f"nested more than {MAX_DEPTH} levels deep")
+        self.depth = depth
         self.ws()
         if self.i >= len(self.s):
             raise self.fail("a value is missing")
@@ -86,12 +92,14 @@ class _Flow:
     def seq(self) -> list[Any]:
         self.i += 1
         out: list[Any] = []
+        depth = self.depth
         self.ws()
         if self.s[self.i:self.i + 1] == "]":
             self.i += 1
             return out
         while True:
-            out.append(self.value(",]"))
+            out.append(self.value(",]", depth + 1))
+            self.depth = depth
             self.ws()
             c = self.s[self.i:self.i + 1]
             self.i += 1
@@ -116,7 +124,9 @@ class _Flow:
             if key in out:
                 raise self.fail(f"duplicate key {key!r}")
             self.i = m.end() + 1
-            out[key] = self.value(",}")
+            depth = self.depth
+            out[key] = self.value(",}", depth + 1)
+            self.depth = depth
             self.ws()
             c = self.s[self.i:self.i + 1]
             self.i += 1
@@ -154,18 +164,27 @@ class _Flow:
         if text[0] in "&*!|>%@`?":
             raise self.fail(f"YAML feature {text[0]!r} isn't supported in a charter")
         if _INT.fullmatch(text):
+            digits = text.lstrip("-")
+            if len(digits) > 1 and digits[0] == "0":
+                raise self.fail(f"{text} has a leading zero (YAML may read it as octal); quote it or drop the zero")
+            if len(digits) > MAX_INT_DIGITS:
+                raise self.fail(f"a number over {MAX_INT_DIGITS} digits")
             return int(text)
         return {"true": True, "false": False, "null": None, "~": None}.get(text, text)
 
 
 def _strip_comment(line: str) -> str:
     """Drop a trailing `# comment` that sits outside quotes."""
-    quote = None
+    quote, escaped = None, False
     for i, c in enumerate(line):
         if quote:
-            if c == quote:
+            if escaped:
+                escaped = False
+            elif c == "\\" and quote == '"':
+                escaped = True
+            elif c == quote:
                 quote = None
-        elif c in "\"'":
+        elif c in "\"'" and (i == 0 or line[i - 1] in " [{,:"):
             quote = c
         elif c == "#" and (i == 0 or line[i - 1] == " "):
             return line[:i].rstrip()
@@ -235,6 +254,7 @@ class Charter:
     fields: dict[str, Any]
     where: dict[str, int]
     headings: list[tuple[int, str]]  # (line, text) of each `## ` heading in the body
+    body: list[tuple[int, str]] = field(default_factory=list)  # body lines outside fences and comments
 
     @property
     def sha256(self) -> str:
@@ -246,6 +266,9 @@ class Charter:
 
 def read_charter(path: Path) -> Charter:
     """Raises CharterError for a file that can't be read as a charter at all."""
+    for part in (path, *list(path.parents)[:3]):  # charter.md, the run folder, runs, .audit
+        if part.is_symlink():
+            raise CharterError(0, f"{part} is a symlink; a charter is read only from real files and folders")
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
@@ -264,8 +287,28 @@ def read_charter(path: Path) -> Charter:
     if any("\r" in l for l in lines[:end + 1]):
         raise CharterError(0, "carriage returns in the front matter; use LF line endings")
     fields, where = parse_front_matter(lines[1:end], 2)
-    headings = [(i + 1, l[3:].strip()) for i, l in enumerate(lines) if i > end and l.startswith("## ")]
-    return Charter(path, raw, fields, where, headings)
+    body: list[tuple[int, str]] = []
+    fence, comment = None, False
+    for i in range(end + 1, len(lines)):
+        line = lines[i]
+        stripped = line.lstrip()
+        if fence:
+            if stripped.startswith(fence):
+                fence = None
+            continue
+        if comment:
+            comment = "-->" not in line
+            continue
+        if stripped.startswith(("```", "~~~")):
+            fence = stripped[:3]
+            continue
+        if stripped.startswith("<!--"):
+            comment = "-->" not in stripped[4:]
+            continue
+        body.append((i + 1, line))
+    # A heading inside a code block or HTML comment isn't a section a reader sees.
+    headings = [(n, l[3:].strip()) for n, l in body if l.startswith("## ")]
+    return Charter(path, raw, fields, where, headings, body)
 
 
 # --- checking ------------------------------------------------------------------------------
@@ -280,9 +323,9 @@ def _minutes(value: Any) -> int | None:
 
 def _has_placeholder(value: Any) -> bool:
     if isinstance(value, str):
-        return PLACEHOLDER in value
+        return _PLACEHOLDER_RE.search(value) is not None
     if isinstance(value, dict):
-        return any(_has_placeholder(v) for v in value.values())
+        return any(_has_placeholder(k) or _has_placeholder(v) for k, v in value.items())
     if isinstance(value, list):
         return any(_has_placeholder(v) for v in value)
     return False
@@ -304,7 +347,7 @@ def check_charter(c: Charter, run_id: str) -> list[Problem]:
             out.append(Problem(1, f"missing required field {key!r}"))
     if "run_id" in f and f["run_id"] != run_id:
         bad("run_id", f"run_id {f['run_id']!r} doesn't match the run folder {run_id!r}")
-    tier = f.get("tier")
+    tier = f.get("tier") if type(f.get("tier")) is int else None
     if "tier" in f and tier not in (1, 2, 3):
         bad("tier", "tier must be 1, 2 or 3")
     for key in ("title", "predicate"):
@@ -322,14 +365,18 @@ def check_charter(c: Charter, run_id: str) -> list[Problem]:
                 bad("gates", f"gates can be added but not removed; missing {', '.join(missing)}")
     for key, value in f.items():
         if _has_placeholder(value):
-            bad(key, f"{key} still has a {PLACEHOLDER} placeholder")
+            bad(key, f"{key} still has a placeholder (TODO, TBD, FIXME or XXX)")
+    for n, text in c.body:
+        if _PLACEHOLDER_RE.search(text):
+            out.append(Problem(n, "the body still has a placeholder (TODO, TBD, FIXME or XXX)"))
 
     if tier in (2, 3):
         out.extend(_check_significant(c))
     if tier == 3:
         review = f.get("review")
         if isinstance(review, dict):
-            if "security" not in (review.get("lenses") or []):
+            lenses = review.get("lenses")
+            if not isinstance(lenses, list) or "security" not in lenses:
                 bad("review", "tier 3 needs the security lens in review.lenses")
             if review.get("decision_review") is not True:
                 bad("review", "tier 3 needs review.decision_review: true")
@@ -353,8 +400,8 @@ def _check_significant(c: Charter) -> list[Problem]:
             for k in ("usd", "tokens", "max_parallel_agents"):
                 if not _positive_int(budget.get(k)):
                     bad("budget", f"budget.{k} must be a positive whole number")
-            if _minutes(budget.get("wall_clock")) is None:
-                bad("budget", "budget.wall_clock must be a duration like 90m, 8h or 2d")
+            if not _minutes(budget.get("wall_clock")):
+                bad("budget", "budget.wall_clock must be a positive duration like 90m, 8h or 2d")
     if "estimate" in f:
         if not isinstance(estimate, dict):
             bad("estimate", "estimate must be a map")
@@ -410,17 +457,20 @@ def _check_significant(c: Charter) -> list[Problem]:
 
 # --- approval ------------------------------------------------------------------------------
 
-_EVIDENCE_HASH = re.compile(r"charter\.md sha256 ([0-9a-f]{64})")
+_EVIDENCE_HASH = re.compile(r"charter\.md sha256 ([0-9a-f]{64})(?:,.*)?")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def approved_hash(entry: Any) -> str | None:
     """The charter hash an approval entry approves: data.charter_sha256, or for approvals
     written before `ledger charter approve` existed, the `charter.md sha256 <hex>` evidence."""
+    if not isinstance(entry.actor, HumanActor):
+        return None
     value = entry.data.get("charter_sha256")
     if isinstance(value, str):
-        return value
+        return value if _SHA256.fullmatch(value) else None
     for pointer in entry.evidence:
-        m = _EVIDENCE_HASH.search(pointer)
+        m = _EVIDENCE_HASH.fullmatch(pointer)
         if m:
             return m.group(1)
     return None
@@ -464,7 +514,7 @@ staffing:
   - {{role: reviewers, tool: claude-code, model: [TODO], count: 2}}
 review: {{lenses: [correctness, maintainer], decision_review: false}}
 spec_level: TODO             # types | schemas | property-tests | model-check
-rollback: {{TODO: "how each risky change is undone"}}
+rollback: {{TODO: "TODO: how each risky change is undone"}}
 soc2: {{approved_before_build: true, tested: true, independent_review: true, recorded: true}}
 ---
 
