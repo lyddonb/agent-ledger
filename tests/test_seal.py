@@ -177,6 +177,57 @@ class SealTest(unittest.TestCase):
         report, kinds = self.repo.kinds(base=base)
         self.assertEqual(kinds, [])
 
+    def test_an_append_racing_the_seal_makes_it_refuse_not_seal_the_wrong_head(self):
+        self.repo.commit()
+        before = self.repo.ledger(RUN_A).read_bytes()
+        raced = []
+
+        def clock():
+            if not raced:  # another writer appends just as the seal is chained
+                raced.append(append(self.repo.sink, RUN_A, actor=AGENT, type=EntryType.DECISION,
+                                    summary="racing", why="w"))
+            return T0
+
+        with self.assertRaisesRegex(LedgerError, "appended while sealing"):
+            seal_run(self.repo.sink, self.repo.root, RUN_A, actor=AGENT, clock=clock)
+        entries = self.repo.sink.read(RUN_A).entries
+        self.assertNotEqual(entries[-1].type, EntryType.SEAL)
+        self.assertTrue(self.repo.ledger(RUN_A).read_bytes().startswith(before))
+        self.assertFalse(self.repo.sink.index_path.exists())
+
+    def test_a_broken_index_stops_the_seal_before_anything_is_written(self):
+        self.repo.commit()
+        self.repo.sink.index_path.write_bytes(b"not json\n")
+        before = self.repo.ledger(RUN_A).read_bytes()
+        with self.assertRaises(LedgerError):
+            self.seal()
+        self.assertEqual(self.repo.ledger(RUN_A).read_bytes(), before)
+
+    def test_an_index_that_already_names_an_unsealed_run_stops_the_seal(self):
+        self.repo.commit()
+        self.repo.sink.index_path.write_bytes(next_line((0, "genesis:index"), now=T0, run_id=RUN_A,
+                                                        seal="d" * 64, commit="c" * 40))
+        before = self.repo.ledger(RUN_A).read_bytes()
+        with self.assertRaisesRegex(LedgerError, "already names"):
+            self.seal()
+        self.assertEqual(self.repo.ledger(RUN_A).read_bytes(), before)
+
+    def test_resealing_when_the_index_names_another_seal_refuses(self):
+        self.repo.commit()
+        self.seal()
+        self.repo.sink.index_path.write_bytes(next_line((0, "genesis:index"), now=T0, run_id=RUN_A,
+                                                        seal="d" * 64, commit="c" * 40))
+        with self.assertRaisesRegex(LedgerError, "another seal"):
+            self.seal()
+
+    def test_a_symlinked_index_is_refused(self):
+        self.repo.commit()
+        elsewhere = self.repo.root / "elsewhere.jsonl"
+        elsewhere.write_bytes(b"")
+        self.repo.sink.index_path.symlink_to(elsewhere)
+        with self.assertRaisesRegex(LedgerError, "symlink"):
+            self.seal()
+
     def test_concurrent_seals_of_different_runs_make_one_index_chain(self):
         runs = [f"2026-11-09-run{i}" for i in range(6)]
         for r in runs:
@@ -257,6 +308,34 @@ class TamperTest(unittest.TestCase):
                                   commit=self.sealed.data["commit"]))
         _, kinds = self.repo.kinds()
         self.assertIn((f".audit/runs/{RUN_A}/ledger.jsonl", Kind.SEAL_COMMIT), kinds)
+
+    def forge_seal(self, data):
+        report = self.repo.sink.read(RUN_A)
+        pre = report.entries[-2]
+        seal = next_entry(pre.head, now=T0, actor=AGENT, type=EntryType.SEAL, summary="Run sealed",
+                          why="w", data=data)
+        lines = self.repo.ledger(RUN_A).read_bytes().splitlines(keepends=True)
+        self.repo.ledger(RUN_A).write_bytes(b"".join(lines[:-1]) + encode_line(seal))
+        return seal
+
+    def test_a_seal_with_a_missing_or_hostile_commit_is_a_finding_not_a_crash(self):
+        for data in [{}, {"commit": "-h"}, {"commit": "HEAD"}, {"commit": "--output=/tmp/x"}]:
+            with self.subTest(data=data):
+                self.forge_seal(data)
+                _, kinds = self.repo.kinds()
+                self.assertIn((f".audit/runs/{RUN_A}/ledger.jsonl", Kind.SEAL_COMMIT), kinds)
+                with self.assertRaisesRegex(LedgerError, "no valid commit"):
+                    self.repo.sink.index_path.write_bytes(b"")
+                    seal_run(self.repo.sink, self.repo.root, RUN_A, actor=AGENT)
+
+    def test_base_sees_a_merged_ledger_under_an_odd_folder_name(self):
+        odd = self.repo.root / ".audit" / "runs" / "2026-11-09-caf\u00e9 run"
+        odd.mkdir()
+        (odd / "ledger.jsonl").write_bytes(b"merged\n")
+        base = self.repo.commit("odd")
+        (odd / "ledger.jsonl").write_bytes(b"")
+        _, kinds = self.repo.kinds(base=base)
+        self.assertIn((".audit/runs/2026-11-09-caf\u00e9 run/ledger.jsonl", Kind.BASE_CHANGED), kinds)
 
     def test_base_catches_an_edited_cut_or_deleted_merged_ledger(self):
         path = self.repo.ledger(RUN_A)

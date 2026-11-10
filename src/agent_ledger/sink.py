@@ -232,8 +232,8 @@ class RepoSink:
         """Append the run's line to INDEX.jsonl under an exclusive lock: verify the index,
         refuse a run that is already indexed, then chain the new line onto its head."""
         path = self.index_path
-        if self.runs_dir.parent.is_symlink():
-            raise LedgerError(f"{self.runs_dir.parent} is a symlink; the index only lives in real folders")
+        if self.runs_dir.parent.is_symlink() or path.is_symlink():
+            raise LedgerError(f"{path} or its folder is a symlink; the index only lives in real folders")
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o644)
         os.close(fd)
         with _locked(path, run_id, exclusive=True) as fd:

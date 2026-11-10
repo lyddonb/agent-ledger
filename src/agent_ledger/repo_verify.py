@@ -19,7 +19,7 @@ from pathlib import Path
 
 from . import _git
 from .entry import EntryType
-from .index import INDEX_FILE, IndexBroken, IndexOk, verify_index_bytes
+from .index import COMMIT_RE, INDEX_FILE, IndexBroken, IndexOk, verify_index_bytes
 from .verify import LEDGER_FILE, Broken, Kind, Problem, Verified, verify_bytes, verify_run
 
 AUDIT_DIR = ".audit"
@@ -120,7 +120,7 @@ def verify_repo(root: Path, base: str | None = None) -> RepoReport:
     for run_id, seal in seals.items():
         rel = _ledger_rel(run_id)
         commit = seal.data.get("commit")
-        if not isinstance(commit, str) or not _git.is_ancestor(root, commit):
+        if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit) or not _git.is_ancestor(root, commit):
             report.add(rel, seal.seq, Kind.SEAL_COMMIT,
                        f"the seal names commit {str(commit)[:12]}, which is not in HEAD's history "
                        f"(a squash or rebase merge drops it; merge with a merge commit)")
@@ -136,8 +136,11 @@ def verify_repo(root: Path, base: str | None = None) -> RepoReport:
         for rel in _git.ls_tree(root, report.base, AUDIT_DIR):
             if not (rel == index_rel or (rel.startswith(f"{AUDIT_DIR}/{RUNS_DIR}/") and rel.endswith("/" + LEDGER_FILE))):
                 continue
-            old = _git.show(root, report.base, rel) or b""
+            old = _git.show(root, report.base, rel)
             path = root / rel
+            if old is None:
+                report.add(rel, 0, Kind.BASE_CHANGED, f"listed at {base} but git couldn't read it")
+                continue
             new = path.read_bytes() if path.is_file() and not path.is_symlink() else None
             if new is None:
                 report.add(rel, 0, Kind.BASE_CHANGED, f"exists at {base} but is gone or not a regular file")
