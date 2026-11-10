@@ -19,10 +19,11 @@ from ._canon import CanonError, parse_value
 from .charter import (CHARTER_FILE, CharterError, approval_status, approve_charter, check_charter,
                       new_charter, read_charter)
 from .entry import Actor, EntryError, EntryType, HumanActor, _actor_from_wire
-from .redact import PolicyError, Redactor, policy_patterns
+from .redact import PolicyError, Redactor, base_policy_patterns, policy_patterns
 from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, seal_run, utc_now
 from ._git import GitError
 from .repo_verify import verify_repo
+from .scan import scan_repo
 from .session import add_session
 from .sink import ChainBroken, IndexBrokenError, LedgerError
 from .verify import Broken, Verified, verify_run
@@ -41,6 +42,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "session": ("archive a redacted session transcript", "docs/specs/S3-audit-ledger.md"),
     "charter": ("write, check, approve or render a run charter", "docs/specs/S1-run-charter.md"),
     "import-tsv": ("convert a show-me-your-work decisions.tsv into a run", "docs/specs/S3-audit-ledger.md"),
+    "scan": ("look for secrets anywhere in .audit", "docs/specs/S3-audit-ledger.md"),
 }
 
 CHAIN_ONLY_NOTE = (
@@ -447,6 +449,36 @@ def _charter(ns: argparse.Namespace) -> int:
         return EXIT_FAILED if ns.charter_command == "approve" else EXIT_ERROR
 
 
+def _add_scan_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--base", metavar="REF", default=None,
+                   help="scan only the committed files under .audit that changed since REF (as in CI); "
+                        "default: every file under .audit on disk")
+    _add_redact_arg(p)
+    _add_root_arg(p)
+
+
+def _scan(ns: argparse.Namespace) -> int:
+    try:
+        root = _root(ns)
+        redactor = _redactor(ns)
+        if ns.base:
+            redactor = Redactor([*base_policy_patterns(root, ns.base), *policy_patterns(root), *ns.redact_pattern])
+        count, findings = scan_repo(root, redactor, ns.base)
+    except (GitError, LedgerError, OSError, PolicyError) as e:
+        print(f"ledger scan: {e}", file=sys.stderr)
+        return EXIT_ERROR
+    for f in findings:
+        where = f"{f.path}:{f.line}" if f.line else f.path
+        what = f.what if f.line == 0 else f"a {f.what} match (redact it, or rewrite this line before merge)"
+        print(f"{where}: secret: {what}")
+    since = f" changed since {ns.base}" if ns.base else ""
+    if findings:
+        print(f"FAILED: {len(findings)} findings in {count} files{since} under .audit")
+        return EXIT_FAILED
+    print(f"ok: no secrets in {count} files{since} under .audit")
+    return EXIT_OK
+
+
 # subcommand -> (add its arguments, run it). A command is implemented iff it is here.
 HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[argparse.Namespace], int]]] = {
     "init": (_add_init_args, _init),
@@ -456,6 +488,7 @@ HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[a
     "session": (_add_session_args, _session),
     "seal": (_add_seal_args, _seal),
     "charter": (_add_charter_args, _charter),
+    "scan": (_add_scan_args, _scan),
 }
 
 
