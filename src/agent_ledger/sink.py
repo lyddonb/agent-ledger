@@ -12,11 +12,13 @@ import os
 import stat
 import tempfile
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, Protocol
 
 from ._canon import show
 from .entry import ChainHead, Entry, _check_run_id, encode_line
+from .index import INDEX_FILE, IndexBroken, IndexOk, next_line, verify_index_bytes
 from .verify import LEDGER_FILE, Broken, Kind, Problem, Verified, verify_bytes
 
 
@@ -41,6 +43,14 @@ class ChainBroken(LedgerError):
 
     def __init__(self, report: Broken) -> None:
         super().__init__(f"{report.run_id}: the ledger fails verify")
+        self.report = report
+
+
+class IndexBrokenError(LedgerError):
+    """INDEX.jsonl fails its own check, so no seal may be added to it."""
+
+    def __init__(self, report: IndexBroken) -> None:
+        super().__init__(f"{INDEX_FILE} fails verify")
         self.report = report
 
 
@@ -203,8 +213,46 @@ class RepoSink:
                 raise LedgerError(f"{run_id}: {LEDGER_FILE} was replaced during the write (a git "
                                   "checkout?); the entry was not recorded. Check the branch, then retry")
 
-    def seal(self, run_id: str, hash: str, commit: str) -> None:
-        raise NotImplementedError("seal is M0 unit 4 (docs/specs/S3-audit-ledger.md)")
+    @property
+    def index_path(self) -> Path:
+        return self.runs_dir.parent / INDEX_FILE
+
+    def read_index(self) -> IndexOk:
+        path = self.index_path
+        if self.runs_dir.parent.is_symlink() or path.is_symlink():
+            raise LedgerError(f"{path} or its folder is a symlink; the index only lives in real folders")
+        if not path.exists():
+            return IndexOk(())
+        report = verify_index_bytes(path.read_bytes())
+        if isinstance(report, IndexBroken):
+            raise IndexBrokenError(report)
+        return report
+
+    def seal(self, run_id: str, hash: str, commit: str, *, now: datetime | None = None) -> None:
+        """Append the run's line to INDEX.jsonl under an exclusive lock: verify the index,
+        refuse a run that is already indexed, then chain the new line onto its head."""
+        path = self.index_path
+        if self.runs_dir.parent.is_symlink():
+            raise LedgerError(f"{self.runs_dir.parent} is a symlink; the index only lives in real folders")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o644)
+        os.close(fd)
+        with _locked(path, run_id, exclusive=True) as fd:
+            data = _read_all(fd)
+            report = verify_index_bytes(data)
+            if isinstance(report, IndexBroken):
+                raise IndexBrokenError(report)
+            if any(line.run_id == run_id for line in report.lines):
+                raise LedgerError(f"{run_id} is already in {INDEX_FILE}")
+            line = next_line(report.head, now=now or datetime.now(timezone.utc), run_id=run_id,
+                             seal=hash, commit=commit)
+            try:
+                _write_all(fd, line)
+                os.fsync(fd)
+            except BaseException:
+                os.ftruncate(fd, len(data))
+                raise
+            if not _still_at(fd, path):
+                raise LedgerError(f"{INDEX_FILE} was replaced during the write; the seal was not indexed. Retry")
 
 
 def _still_at(fd: int, path: Path) -> bool:

@@ -41,7 +41,7 @@ class CliSurfaceTest(unittest.TestCase):
 
     def test_every_unbuilt_command_is_an_honest_stub(self):
         stubs = set(cli.COMMANDS) - set(cli.HANDLERS)
-        self.assertEqual(stubs, {"seal", "charter", "import-tsv"})
+        self.assertEqual(stubs, {"charter", "import-tsv"})
         for name in stubs:
             with self.subTest(name):
                 code, _, err = run_cli(name)
@@ -111,9 +111,10 @@ class VerifyCommandTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("not a directory", err)
 
-    def test_missing_argument_is_a_usage_error(self):
-        code, _, _ = run_cli("verify")
+    def test_base_with_a_run_folder_is_a_usage_error(self):
+        code, _, err = run_cli("verify", ".", "--base", "main")
         self.assertEqual(code, 2)
+        self.assertIn("whole repo", err)
 
 
 AGENT = json.dumps({"kind": "agent", "id": "claude@claude-code#a0f4", "on_behalf_of": "lyddonb@github",

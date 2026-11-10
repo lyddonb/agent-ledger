@@ -233,10 +233,6 @@ class RepoSinkTest(unittest.TestCase):
         append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="s", why="w",
                data={"usd_micros": "only spend entries are checked"})
 
-    def test_seal_is_an_honest_stub(self):
-        with self.assertRaisesRegex(NotImplementedError, "unit 4"):
-            self.sink.seal(RUN_ID, "0" * 64, "abc")
-
 
 # Each worker waits for the go file, then appends N entries as its own agent.
 _WORKER = r"""
