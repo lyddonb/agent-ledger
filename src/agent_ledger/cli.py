@@ -7,6 +7,7 @@ work; the rest exit with code 2 and point at the spec that defines them (M0 char
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import unicodedata
 from datetime import date
@@ -372,6 +373,9 @@ def _add_charter_args(p: argparse.ArgumentParser) -> None:
                                    "charter afterward puts it back to draft until approved again.")
     a.add_argument("run_id", metavar="RUN_ID")
     a.add_argument("--actor", type=_human, required=True, help="the approving human, as S2 JSON")
+    a.add_argument("--sha256", required=True, metavar="HEX",
+                   help="the charter hash (at least 12 characters) that `ledger charter check` printed for "
+                        "the version the human reviewed; a charter edited since is refused")
     a.add_argument("--why", default="The charter was reviewed and approved before work starts (S1)",
                    help="one line: how and why it was approved")
     a.add_argument("--quote", default=None, help="the approver's words, verbatim")
@@ -401,15 +405,21 @@ def _charter(ns: argparse.Namespace) -> int:
         rel = path.relative_to(root)
         charter = read_charter(path)
         if ns.charter_command == "approve":
-            r = approve_charter(sink, ns.run_id, actor=ns.actor, why=ns.why, quote=ns.quote,
+            r = approve_charter(sink, ns.run_id, actor=ns.actor, sha256=ns.sha256, why=ns.why, quote=ns.quote,
                                 channel=ns.channel, relayed_by=ns.relayed_by,
                                 append=lambda *a, **k: append(*a, redactor=_redactor(ns), **k))
             if r.new:
-                print(f"approved {ns.run_id}: charter sha256 {charter.sha256[:12]} at seq {r.entry.seq}")
+                print(f"approved {ns.run_id}: charter sha256 {r.entry.data['charter_sha256'][:16]} at seq {r.entry.seq}")
             else:
                 print(f"{ns.run_id}: this charter is already approved at seq {r.entry.seq}; nothing to do")
             return EXIT_OK
         problems = check_charter(charter, ns.run_id)
+        # What the tools will enforce, as they read it, so the approver reviews exactly that.
+        print(f"charter {rel} sha256 {charter.sha256}")
+        for key in ("tier", "predicate", "scope", "budget", "estimate", "gates", "staffing", "review",
+                    "spec_level", "rollback", "soc2"):
+            if key in charter.fields:
+                print(f"  {key}: {json.dumps(charter.fields[key], ensure_ascii=True, separators=(', ', ': '))}")
         for p in problems:
             print(f"{rel}:{p.line}: {p.message}" if p.line else f"{rel}: {p.message}")
         status = approval_status(sink, ns.run_id, charter.sha256)

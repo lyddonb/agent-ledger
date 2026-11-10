@@ -89,6 +89,14 @@ class ReaderTest(unittest.TestCase):
                     parse_front_matter(text.split("\n"), 2)
                 self.assertGreaterEqual(cm.exception.line, 2)
 
+    def test_values_yaml_would_type_differently_must_be_quoted(self):
+        for text in ["a: [src:]", "a: True", "a: .5", "a: 10.", "a: 1e3", "a: 0x10", "a: 1_000", "a: 2026-11-10",
+                     "a: 10:30", "a: yes", "a: Off", "a: NULL", "a: +1", "a: .inf"]:
+            with self.subTest(text), self.assertRaises(CharterError):
+                parse_front_matter([text], 2)
+        fields, _ = parse_front_matter(['a: [none, "2026-11-10", 10h, grok-4.7-x, "yes"]'], 2)
+        self.assertEqual(fields["a"], ["none", "2026-11-10", "10h", "grok-4.7-x", "yes"])
+
     def test_comments_and_quotes(self):
         fields, _ = parse_front_matter([
             "f: it's # a comment",
@@ -136,6 +144,57 @@ class ReaderTest(unittest.TestCase):
                 self.assertEqual(fields["v"], value)
 
 
+def _reader_agrees(case_text, expected):
+    """None when the reader agrees with YAML's reading (or refuses); else a description."""
+    try:
+        fields, _ = parse_front_matter([f"v: {case_text}"], 2)
+    except CharterError:
+        return None  # refusing is always safe
+    got = fields["v"]
+
+    def typed(v):
+        if isinstance(v, dict):
+            return "__type__" in v or any(typed(x) for x in v.values())
+        if isinstance(v, list):
+            return any(typed(x) for x in v)
+        return False
+
+    if typed(expected):
+        return f"accepted {case_text!r} as {got!r}, but YAML reads it as {expected!r}"
+    if got != expected or type(got) is not type(expected):
+        return f"read {case_text!r} as {got!r}, YAML as {expected!r}"
+    return None
+
+
+class YamlAgreementTest(unittest.TestCase):
+    """Wherever the reader accepts a value, a real YAML parser reads the same value."""
+
+    def test_against_pyyaml_vectors(self):
+        vectors = json.loads((ROOT / "tests/vectors/charter-yaml.json").read_text())
+        self.assertGreater(len(vectors), 500)
+        problems = [p for p in (_reader_agrees(v["text"], v["yaml"]) for v in vectors) if p]
+        self.assertEqual(problems, [])
+
+    def test_against_live_pyyaml(self):
+        try:
+            import yaml  # optional: only where PyYAML happens to be installed; never a dependency
+        except ImportError:
+            self.skipTest("PyYAML isn't installed; the committed vectors cover CI")
+        from yaml_corpus import corpus, yaml_view
+        problems = []
+        for seed in range(5):
+            for text in corpus(seed=seed, n=1000):
+                try:
+                    got = yaml.safe_load(f"v: {text}\n")
+                    expected = yaml_view(got["v"]) if isinstance(got, dict) and set(got) == {"v"} else {"__type__": "shape"}
+                except yaml.YAMLError:
+                    expected = {"__type__": "error"}
+                p = _reader_agrees(text, expected)
+                if p:
+                    problems.append(p)
+        self.assertEqual(problems[:10], [])
+
+
 class CheckTest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
@@ -176,7 +235,7 @@ class CheckTest(unittest.TestCase):
             "bad duration": ({"budget": "{usd: 40, tokens: 1, wall_clock: soon, max_parallel_agents: 1}"}, "duration"),
             "zero agents": ({"budget": "{usd: 40, tokens: 6000000, wall_clock: 6h, max_parallel_agents: 0}"}, "max_parallel_agents"),
             "bad spec level": ({"spec_level": "vibes"}, "spec_level must be"),
-            "staffing count": ({"staffing": "[{role: code, tool: x, model: y, count: 0}]"}, "count must be"),
+            "staffing count": ({"staffing": "[{role: code, tool: x, model: m, count: 0}]"}, "count must be"),
             "placeholder": ({"predicate": '"TODO later"'}, "placeholder"),
             "soc2": ({"soc2": "{tested: true}"}, "soc2 needs"),
             "placeholder key": ({"rollback": '{TODO: "undo it"}'}, "placeholder"),
@@ -184,13 +243,56 @@ class CheckTest(unittest.TestCase):
             "bool tier": ({"tier": "true"}, "tier must be"),
             "zero wall clock": ({"budget": "{usd: 40, tokens: 6000000, wall_clock: 0m, max_parallel_agents: 4}",
                                  "estimate": "{usd: 1, tokens: 1, wall_clock: 0m, calls: {}}"}, "positive duration"),
-            "bool count": ({"staffing": "[{role: code, tool: x, model: y, count: true}]"}, "count must be"),
+            "bool count": ({"staffing": "[{role: code, tool: x, model: m, count: true}]"}, "count must be"),
             "bool budget": ({"budget": "{usd: true, tokens: 6000000, wall_clock: 6h, max_parallel_agents: 4}"}, "budget.usd"),
         }
         for label, (front, expect) in cases.items():
             with self.subTest(label):
                 problems = self.check(charter_text(front))
                 self.assertTrue(any(expect in p for p in problems), problems)
+
+    def test_hidden_line_breaks_and_bidi_are_refused(self):
+        budget = "{usd: 4000, tokens: 600000000, wall_clock: 9d, max_parallel_agents: 40}"
+        for ch in ["\u2028", "\u2029", "\x85", "\u202e", "\u2066", "\x0b"]:
+            text = charter_text({"budget": budget + " #" + ch + "budget: {usd: 40}"})
+            with self.subTest(ch=hex(ord(ch))), self.assertRaisesRegex(CharterError, "U\\+"):
+                self.check(text)
+        for ch in ["\u200b", "\ufeff", "\u2060"]:
+            with self.subTest(ch=hex(ord(ch))), self.assertRaises(CharterError):
+                self.check(charter_text({"title": f'"Ex{ch}port"'}))
+
+    def test_unknown_fields_are_named(self):
+        for front, expect in [({"budget_override": "{usd: 100000}"}, "unknown field 'budget_override'"),
+                              ({"budget": "{usd: 40, tokens: 6000000, wall_clock: 6h, max_parallel_agents: 4, cap: 1}"},
+                               "unknown budget field 'cap'")]:
+            with self.subTest(expect):
+                self.assertTrue(any(expect in p for p in self.check(charter_text(front))))
+
+    def test_soc2_gaps_need_a_section(self):
+        gap = {"soc2": "{approved_before_build: false, tested: true, independent_review: true, recorded: true}"}
+        self.assertTrue(any("SOC 2 gaps" in p for p in self.check(charter_text(gap))))
+        sections = SECTIONS[:-1] + ["SOC 2 gaps", SECTIONS[-1]]
+        self.assertEqual(self.check(charter_text(gap, sections=sections)), [])
+
+    def test_calls_scope_and_tier_1_budgets_are_checked(self):
+        cases = [({"estimate": "{usd: 1, tokens: 1, wall_clock: 1h, calls: {rollouts: -5}}"}, "calls counts"),
+                 ({"scope": "[null, 3]"}, "scope must be"),
+                 ({"scope": '[""]'}, "scope must be")]
+        for front, expect in cases:
+            with self.subTest(expect):
+                self.assertTrue(any(expect in p for p in self.check(charter_text(front))))
+        keep = ("run_id", "title", "tier", "predicate", "scope", "gates", "budget")
+        tier1 = charter_text({"tier": "1", "budget": "{usd: 0, tokens: 1, wall_clock: 1h, max_parallel_agents: 1}"},
+                             sections=[], drop=[k for k in FRONT if k not in keep])
+        self.assertTrue(any("budget.usd" in p for p in self.check(tier1)))
+
+    def test_fences_close_only_on_a_matching_fence(self):
+        hidden = "\n".join(f"## {s}" for s in SECTIONS)
+        text = charter_text(sections=[]) + "\n````\n```\n" + hidden + "\n````\n"
+        self.assertTrue(any("## Goal" in p for p in self.check(text)))
+        indented = charter_text(sections=[]) + "\n    ```\n" + hidden + "\n"
+        self.assertEqual([p for p in self.check(indented) if "## " in p], [],
+                         "an indented ``` is not a fence, so the headings count")
 
     def test_tier_3_with_malformed_lenses_is_a_problem_not_a_crash(self):
         problems = self.check(charter_text({"tier": "3", "review": "{lenses: 5, decision_review: true}"}))
@@ -241,6 +343,7 @@ class ApprovalTest(unittest.TestCase):
         self.path.write_text(charter_text())
 
     def approve(self, **kw):
+        kw.setdefault("sha256", read_charter(self.path).sha256)
         return approve_charter(self.sink, RUN, actor=HUMAN, why="reviewed", quote="Approved",
                                channel="claude-code chat", relayed_by=None, append=append, **kw)
 
@@ -276,8 +379,8 @@ class ApprovalTest(unittest.TestCase):
     def test_an_agent_cannot_approve(self):
         init_run(self.sink, RUN, actor=AGENT, why="test")
         with self.assertRaises(EntryError):
-            approve_charter(self.sink, RUN, actor=AGENT, why="w", quote=None, channel=None,
-                            relayed_by=None, append=append)
+            approve_charter(self.sink, RUN, actor=AGENT, sha256=read_charter(self.path).sha256, why="w",
+                            quote=None, channel=None, relayed_by=None, append=append)
 
     def test_older_approvals_with_the_hash_in_evidence_count(self):
         init_run(self.sink, RUN, actor=AGENT, why="test")
@@ -297,6 +400,24 @@ class ApprovalTest(unittest.TestCase):
         self.assertEqual(self.status().state, "stale")
         self.path.write_bytes(original)
         self.assertEqual(self.status().state, "approved")
+
+    def test_approval_is_bound_to_the_reviewed_hash(self):
+        init_run(self.sink, RUN, actor=AGENT, why="test")
+        reviewed = read_charter(self.path).sha256
+        self.path.write_text(charter_text({"budget": "{usd: 40, tokens: 6000000, wall_clock: 6h, max_parallel_agents: 4}",
+                                           "predicate": '"edited after review"'}))
+        with self.assertRaisesRegex(CharterError, "changed since it was reviewed"):
+            self.approve(sha256=reviewed[:12])
+        with self.assertRaisesRegex(CharterError, "at least the first 12"):
+            self.approve(sha256=read_charter(self.path).sha256[:8])
+        self.assertEqual([e.type for e in self.sink.read(RUN).entries], [EntryType.STATE])
+
+    def test_legacy_evidence_must_be_the_exact_form(self):
+        init_run(self.sink, RUN, actor=AGENT, why="test")
+        sha = read_charter(self.path).sha256
+        append(self.sink, RUN, actor=HUMAN, type=EntryType.APPROVAL, summary="x", why="w",
+               evidence=[f"charter.md sha256 {sha}, rejected"])
+        self.assertEqual(self.status().state, "draft")
 
     def test_a_symlinked_charter_is_refused(self):
         elsewhere = self.root / "elsewhere.md"
@@ -328,11 +449,17 @@ class CharterCliTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("draft: not approved", out)
         self.assertEqual(self.cli("init", "export-retries", "--date", "2026-11-10", "--actor", self.agent)[0], 0)
-        code, _, err = self.cli("charter", "approve", RUN, "--actor", self.agent)
+        code, _, err = self.cli("charter", "approve", RUN, "--actor", self.agent, "--sha256", "0" * 12)
         self.assertEqual(code, 2)
         self.assertIn("only a human", err)
-        code, out, err = self.cli("charter", "approve", RUN, "--actor", self.human, "--quote", "Approved",
-                                  "--relayed-by", "claude@claude-code#70d5")
+        code, out, _ = self.cli("charter", "check", RUN)
+        sha = out.split("sha256 ", 1)[1].split()[0][:12]
+        code, _, err = self.cli("charter", "approve", RUN, "--actor", self.human, "--sha256", sha,
+                                "--quote", "Approved", "--relayed-by", "claude@claude-code#70d5")
+        self.assertEqual(code, 1, "a relayed approval must quote the hash prefix")
+        self.assertIn("hash prefix", err)
+        code, out, err = self.cli("charter", "approve", RUN, "--actor", self.human, "--sha256", sha,
+                                  "--quote", f"Approved {sha}", "--relayed-by", "claude@claude-code#70d5")
         self.assertEqual(code, 0, err)
         code, out, _ = self.cli("charter", "check", RUN, "--require-approved")
         self.assertEqual(code, 0)

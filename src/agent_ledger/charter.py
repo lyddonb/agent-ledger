@@ -31,11 +31,22 @@ DEFAULT_GATES = ("migration", "delete-data", "public-api", "deploy", "auth-permi
                  "new-dependency", "secrets", "outbound-message", "license", "spend")
 SPEC_LEVELS = ("types", "schemas", "property-tests", "model-check")
 SOC2_KEYS = ("approved_before_build", "tested", "independent_review", "recorded")
+TOP_KEYS = ("run_id", "title", "tier", "predicate", "scope", "budget", "estimate", "gates", "staffing",
+            "review", "spec_level", "rollback", "soc2")
+NESTED_KEYS = {"budget": ("usd", "tokens", "wall_clock", "max_parallel_agents"),
+               "estimate": ("usd", "tokens", "wall_clock", "calls"),
+               "review": ("lenses", "decision_review"),
+               "soc2": SOC2_KEYS}
 BODY_SECTIONS = ("Goal", "Scope and non-scope", "Plan", "Gates and rollback", "Staffing and why",
                  "Guardrails", "Security notes", "Review plan", "Budget and estimate", "Risks")
 PLACEHOLDER = "TODO"
 _PLACEHOLDER_RE = re.compile(r"\b(?:TODO|TBD|FIXME|XXX)\b", re.IGNORECASE)
 MAX_DEPTH = 16
+# Characters that make a person and a parser see different text: YAML line breaks a reader
+# treats as ordinary (U+0085, U+2028, U+2029), other controls, and bidi overrides. Refused in
+# the whole charter; zero-width characters are refused in the front matter too.
+_UNSAFE = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+_UNSAFE_FRONT = re.compile("[\t\u200b-\u200f\u2060-\u2064\ufeff]")
 MAX_INT_DIGITS = 18
 
 
@@ -55,6 +66,9 @@ class Problem:
 # --- reading the front matter -------------------------------------------------------------
 
 _INT = re.compile(r"-?[0-9]+")
+# Plain values YAML 1.1 or 1.2 would read as a float, date, time, hex, octal, boolean or null.
+_YAML_TYPED = re.compile(r"[-+]?[0-9][0-9_:.eExXoObBtTzZ +\-]*|[-+]?0[xXoObB][0-9a-fA-F_]*|[-+]?\.[0-9a-zA-Z]+|"
+                         r"(?i:y|n|yes|no|on|off|true|false|null)")
 _KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_\-]*")
 
 
@@ -155,13 +169,16 @@ class _Flow:
     def plain(self, stops: str) -> Any:
         start = self.i
         while self.i < len(self.s) and self.s[self.i] not in stops:
-            if self.s[self.i] in "[]{}" or (self.s[self.i] == ":" and self.s[self.i + 1:self.i + 2] in (" ", "")):
+            nxt = self.s[self.i + 1:self.i + 2]
+            if self.s[self.i] in "[]{}" or (self.s[self.i] in ":?" and nxt in (" ", "", ",", "]", "}")):
                 raise self.fail(f"{self.s[self.i]!r} in a plain value; quote the value")
             self.i += 1
         text = self.s[start:self.i].strip()
         if not text:
             raise self.fail("a value is missing")
-        if text[0] in "&*!|>%@`?":
+        if text == "-" or text.startswith("- "):
+            raise self.fail("a plain value starting with '- ' is a YAML list item; quote it")
+        if text[0] in "&*!|>%@`?#":
             raise self.fail(f"YAML feature {text[0]!r} isn't supported in a charter")
         if _INT.fullmatch(text):
             digits = text.lstrip("-")
@@ -170,7 +187,11 @@ class _Flow:
             if len(digits) > MAX_INT_DIGITS:
                 raise self.fail(f"a number over {MAX_INT_DIGITS} digits")
             return int(text)
-        return {"true": True, "false": False, "null": None, "~": None}.get(text, text)
+        if text in ("true", "false", "null", "~"):
+            return {"true": True, "false": False, "null": None, "~": None}[text]
+        if _YAML_TYPED.fullmatch(text):
+            raise self.fail(f"{text!r} reads as a number, date, boolean or null in YAML; quote it")
+        return text
 
 
 def _strip_comment(line: str) -> str:
@@ -208,8 +229,10 @@ def parse_front_matter(lines: list[str], first: int) -> tuple[dict[str, Any], di
     i = 0
     while i < len(lines):
         n = first + i
-        if "\t" in lines[i]:
-            raise CharterError(n, "a tab in the front matter; use spaces")
+        bad_char = _UNSAFE_FRONT.search(lines[i])
+        if bad_char:
+            raise CharterError(n, f"character U+{ord(bad_char.group()):04X} in the front matter (a tab or an "
+                                  f"invisible character); remove it")
         raw = _strip_comment(lines[i])
         i += 1
         if not raw.strip():
@@ -228,8 +251,10 @@ def parse_front_matter(lines: list[str], first: int) -> tuple[dict[str, Any], di
             continue
         items: list[Any] = []
         while i < len(lines):
-            if "\t" in lines[i]:
-                raise CharterError(first + i, "a tab in the front matter; use spaces")
+            bad_char = _UNSAFE_FRONT.search(lines[i])
+            if bad_char:
+                raise CharterError(first + i, f"character U+{ord(bad_char.group()):04X} in the front matter "
+                                              f"(a tab or an invisible character); remove it")
             item = _strip_comment(lines[i])
             if not item.strip():
                 i += 1
@@ -277,7 +302,14 @@ def read_charter(path: Path) -> Charter:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as e:
         raise CharterError(0, f"not UTF-8 at byte {e.start}") from None
+    if text.startswith("\ufeff"):
+        raise CharterError(1, "a byte-order mark; save the charter as UTF-8 without one")
     lines = text.split("\n")
+    for n, line in enumerate(lines, 1):
+        m = _UNSAFE.search(line.rstrip("\r"))
+        if m:
+            raise CharterError(n, f"character U+{ord(m.group()):04X} can make the text read differently "
+                                  f"from what is shown; remove it")
     if lines[0].rstrip("\r") != "---":
         raise CharterError(1, "a charter starts with a --- line, then front matter, then ---")
     try:
@@ -292,15 +324,18 @@ def read_charter(path: Path) -> Charter:
     for i in range(end + 1, len(lines)):
         line = lines[i]
         stripped = line.lstrip()
+        indent = len(line) - len(stripped)
         if fence:
-            if stripped.startswith(fence):
+            closing = re.fullmatch(r"(`{3,}|~{3,})\s*", stripped)
+            if indent <= 3 and closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
                 fence = None
             continue
         if comment:
             comment = "-->" not in line
             continue
-        if stripped.startswith(("```", "~~~")):
-            fence = stripped[:3]
+        opening = re.match(r"(`{3,}|~{3,})", stripped)
+        if indent <= 3 and opening:
+            fence = opening.group(1)
             continue
         if stripped.startswith("<!--"):
             comment = "-->" not in stripped[4:]
@@ -335,6 +370,15 @@ def _positive_int(v: Any) -> bool:
     return type(v) is int and v > 0
 
 
+def _scope_item(item: Any) -> bool:
+    if isinstance(item, str):
+        return bool(item.strip())
+    if isinstance(item, dict) and len(item) == 1:
+        paths = next(iter(item.values()))
+        return isinstance(paths, list) and bool(paths) and all(isinstance(x, str) and x.strip() for x in paths)
+    return False
+
+
 def check_charter(c: Charter, run_id: str) -> list[Problem]:
     """Every problem with a charter for its tier (S1), each with the line it starts on."""
     f, out = c.fields, []
@@ -345,6 +389,15 @@ def check_charter(c: Charter, run_id: str) -> list[Problem]:
     for key in ("run_id", "title", "tier", "predicate", "scope", "gates"):
         if key not in f:
             out.append(Problem(1, f"missing required field {key!r}"))
+    # An unknown key would look meaningful to a reviewer while nothing enforces it.
+    for key in f:
+        if key not in TOP_KEYS:
+            bad(key, f"unknown field {key!r}; S1 defines {', '.join(TOP_KEYS)}")
+        elif key in NESTED_KEYS and isinstance(f[key], dict):
+            extra = [k for k in f[key] if k not in NESTED_KEYS[key]]
+            if extra:
+                bad(key, f"unknown {key} field {', '.join(map(repr, extra))}; {key} has "
+                         f"{', '.join(NESTED_KEYS[key])}")
     if "run_id" in f and f["run_id"] != run_id:
         bad("run_id", f"run_id {f['run_id']!r} doesn't match the run folder {run_id!r}")
     tier = f.get("tier") if type(f.get("tier")) is int else None
@@ -353,8 +406,8 @@ def check_charter(c: Charter, run_id: str) -> list[Problem]:
     for key in ("title", "predicate"):
         if key in f and (not isinstance(f[key], str) or not f[key].strip()):
             bad(key, f"{key} must be a non-empty string")
-    if "scope" in f and (not isinstance(f["scope"], list) or not f["scope"]):
-        bad("scope", "scope must be a non-empty list")
+    if "scope" in f and (not isinstance(f["scope"], list) or not f["scope"] or not all(map(_scope_item, f["scope"]))):
+        bad("scope", "scope must be a non-empty list of paths, or of `repo: [paths]` items")
     if "gates" in f:
         gates = f["gates"]
         if not isinstance(gates, list) or not all(isinstance(g, str) for g in gates):
@@ -370,6 +423,7 @@ def check_charter(c: Charter, run_id: str) -> list[Problem]:
         if _PLACEHOLDER_RE.search(text):
             out.append(Problem(n, "the body still has a placeholder (TODO, TBD, FIXME or XXX)"))
 
+    out.extend(_check_budget(c))
     if tier in (2, 3):
         out.extend(_check_significant(c))
     if tier == 3:
@@ -383,15 +437,13 @@ def check_charter(c: Charter, run_id: str) -> list[Problem]:
     return sorted(out, key=lambda p: p.line)
 
 
-def _check_significant(c: Charter) -> list[Problem]:
+def _check_budget(c: Charter) -> list[Problem]:
+    """Budget and estimate, checked at every tier whenever they are present."""
     f, out = c.fields, []
 
     def bad(key: str, message: str) -> None:
         out.append(Problem(c.line(key), message))
 
-    for key in ("budget", "estimate", "staffing", "review", "spec_level", "rollback", "soc2"):
-        if key not in f:
-            out.append(Problem(1, f"tier 2 and 3 need {key!r}"))
     budget, estimate = f.get("budget"), f.get("estimate")
     if "budget" in f:
         if not isinstance(budget, dict):
@@ -420,6 +472,21 @@ def _check_significant(c: Charter) -> list[Problem]:
                 e, b = _minutes(estimate.get("wall_clock")), _minutes(budget.get("wall_clock"))
                 if e is not None and b is not None and e > b:
                     bad("estimate", "estimate.wall_clock is over budget.wall_clock")
+    calls = estimate.get("calls") if isinstance(estimate, dict) else None
+    if isinstance(calls, dict) and any(type(v) is not int or v < 0 for v in calls.values()):
+        bad("estimate", "estimate.calls counts must be whole numbers, 0 or more")
+    return out
+
+
+def _check_significant(c: Charter) -> list[Problem]:
+    f, out = c.fields, []
+
+    def bad(key: str, message: str) -> None:
+        out.append(Problem(c.line(key), message))
+
+    for key in ("budget", "estimate", "staffing", "review", "spec_level", "rollback", "soc2"):
+        if key not in f:
+            out.append(Problem(1, f"tier 2 and 3 need {key!r}"))
     staffing = f.get("staffing")
     if "staffing" in f:
         if not isinstance(staffing, list) or not staffing:
@@ -441,6 +508,9 @@ def _check_significant(c: Charter) -> list[Problem]:
     soc2 = f.get("soc2")
     if "soc2" in f and (not isinstance(soc2, dict) or any(k not in soc2 for k in SOC2_KEYS)):
         bad("soc2", f"soc2 needs {', '.join(SOC2_KEYS)}")
+    elif isinstance(soc2, dict) and any(v is not True for v in soc2.values()):
+        if not any(h == "SOC 2 gaps" or h.startswith("SOC 2 gaps ") for _, h in c.headings):
+            bad("soc2", "a soc2 value that isn't true needs a `## SOC 2 gaps` section explaining it")
 
     names = [h for _, h in c.headings]
     pos = -1
@@ -457,7 +527,8 @@ def _check_significant(c: Charter) -> list[Problem]:
 
 # --- approval ------------------------------------------------------------------------------
 
-_EVIDENCE_HASH = re.compile(r"charter\.md sha256 ([0-9a-f]{64})(?:,.*)?")
+# The exact form the M0 run's hand-written approvals used.
+_EVIDENCE_HASH = re.compile(r"charter\.md sha256 ([0-9a-f]{64})(?:, as committed in [0-9a-f]{7,40})?")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
@@ -590,12 +661,31 @@ class Approved:
     new: bool
 
 
-def approve_charter(sink: RepoSink, run_id: str, *, actor: HumanActor, why: str, quote: str | None,
-                    channel: str | None, relayed_by: str | None, append) -> Approved:
-    """Record a human's approval of the charter as it is now. The charter must pass check, and
-    the run's ledger must exist. Approving the same charter twice is a no-op."""
+MIN_SHA_PREFIX = 12
+
+
+def approve_charter(sink: RepoSink, run_id: str, *, actor: HumanActor, sha256: str, why: str,
+                    quote: str | None, channel: str | None, relayed_by: str | None, append) -> Approved:
+    """Record a human's approval of the charter, bound to the version the human read.
+
+    `sha256` is the hash (at least its first 12 hex characters) that `ledger charter check`
+    printed for the version the human reviewed; it must match the file now, so an edit between
+    review and approval is refused. When an agent relays the approval, the human's quoted words
+    must contain that prefix, so the archived session shows which version was approved. The
+    charter must pass check, and the run's ledger must exist. Approving the same charter twice
+    is a no-op."""
     path = sink.run_dir(run_id) / CHARTER_FILE
     charter = read_charter(path)
+    sha256 = sha256.lower()
+    if not re.fullmatch(f"[0-9a-f]{{{MIN_SHA_PREFIX},64}}", sha256):
+        raise CharterError(0, f"--sha256 must be at least the first {MIN_SHA_PREFIX} hex characters of the "
+                              f"hash `ledger charter check` printed")
+    if not charter.sha256.startswith(sha256):
+        raise CharterError(0, f"the charter changed since it was reviewed: it is now {charter.sha256[:16]}, "
+                              f"not {sha256}. Review it again")
+    if relayed_by and (not quote or sha256[:MIN_SHA_PREFIX] not in quote.lower()):
+        raise CharterError(0, f"a relayed approval needs the approver's words in --quote, including the "
+                              f"hash prefix {sha256[:MIN_SHA_PREFIX]} they approved")
     problems = check_charter(charter, run_id)
     if problems:
         raise CharterError(problems[0].line, f"the charter fails check ({len(problems)} problems); "
