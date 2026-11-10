@@ -43,6 +43,13 @@ class Kind(str, enum.Enum):
     SEQ_MISMATCH = "seq-mismatch"
     PREV_MISMATCH = "prev-mismatch"
     RUN_ID_MISMATCH = "run-id-mismatch"
+    # across runs, the index and git history (`ledger verify` over a repo, M0 unit 4)
+    DUPLICATE_SEAL = "duplicate-seal"    # INDEX.jsonl names one run twice
+    AFTER_SEAL = "after-seal"            # an entry follows a run's seal entry
+    UNINDEXED_SEAL = "unindexed-seal"    # a sealed run has no INDEX.jsonl line
+    INDEX_MISMATCH = "index-mismatch"    # an INDEX.jsonl line doesn't match the run's seal entry
+    SEAL_COMMIT = "seal-commit"          # the commit a seal names isn't in history, or holds another head
+    BASE_CHANGED = "base-changed"        # a line that exists on the base branch was changed or removed
 
 
 @dataclass(frozen=True)
