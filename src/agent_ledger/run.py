@@ -5,6 +5,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from .redact import Redactor, Unconfirmed
 from .entry import TS_FORMAT, TS_RE, Actor, ChainHead, Entry, EntryError, EntryType, next_entry
 from .sink import LedgerError, RepoSink, StaleHead
 
@@ -76,8 +77,20 @@ def run_id_for(slug: str, day: date) -> str:
     return f"{day.isoformat()}-{slug}"
 
 
-def init_run(sink: RepoSink, run_id: str, *, actor: Actor, why: str, clock: Clock = utc_now) -> Entry:
+def redact_fields(redactor: Redactor, fields: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
+    """Redact the free-text fields of an entry (summary, why, evidence, data) before chaining.
+    Raises LedgerError when redaction can't be confirmed, so nothing unconfirmed is written."""
+    try:
+        clean, counts = redactor.redact_value(dict(fields))
+    except Unconfirmed as e:
+        raise LedgerError(f"refusing: {e}") from None
+    return clean, counts
+
+
+def init_run(sink: RepoSink, run_id: str, *, actor: Actor, why: str, clock: Clock = utc_now,
+             redactor: Redactor | None = None) -> Entry:
     """Write a run's first entry, a `state` entry with data {"state": "started"}."""
+    why = redact_fields(redactor or Redactor(), {"why": why})[0]["why"]
     first = next_entry(ChainHead.genesis(run_id), now=clock(), actor=actor, type=EntryType.STATE,
                        summary="Run started", why=why, data={"state": "started"})
     sink.create(first)
@@ -95,12 +108,16 @@ def append(
     evidence: Sequence[str] = (),
     data: Mapping[str, Any] | None = None,
     clock: Clock = utc_now,
+    redactor: Redactor | None = None,
 ) -> Entry:
-    """Chain one entry onto the run's current head and write it.
+    """Redact, then chain one entry onto the run's current head and write it.
 
     The sink rejects an entry chained to a stale head, so on a race this re-reads the head
     and re-chains (with a fresh timestamp) instead of forking the chain.
     """
+    fields, _ = redact_fields(redactor or Redactor(), {
+        "summary": summary, "why": why, "evidence": list(evidence), "data": dict(data or {})})
+    summary, why, evidence, data = fields["summary"], fields["why"], fields["evidence"], fields["data"]
     check_imported(data)
     check_spend(type, data)
     for _ in range(APPEND_ATTEMPTS):
