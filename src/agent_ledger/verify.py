@@ -50,6 +50,7 @@ class Kind(str, enum.Enum):
     INDEX_MISMATCH = "index-mismatch"    # an INDEX.jsonl line doesn't match the run's seal entry
     SEAL_COMMIT = "seal-commit"          # the commit a seal names isn't in history, or holds another head
     BASE_CHANGED = "base-changed"        # a line that exists on the base branch was changed or removed
+    UNCOMMITTED = "uncommitted"          # with --base: the working tree isn't the committed file
 
 
 @dataclass(frozen=True)

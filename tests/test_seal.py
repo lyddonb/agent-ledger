@@ -334,6 +334,7 @@ class TamperTest(unittest.TestCase):
         (odd / "ledger.jsonl").write_bytes(b"merged\n")
         base = self.repo.commit("odd")
         (odd / "ledger.jsonl").write_bytes(b"")
+        self.repo.commit("emptied")
         _, kinds = self.repo.kinds(base=base)
         self.assertIn((".audit/runs/2026-11-09-caf\u00e9 run/ledger.jsonl", Kind.BASE_CHANGED), kinds)
 
@@ -347,9 +348,12 @@ class TamperTest(unittest.TestCase):
                             ("emptied", b"")]:
             with self.subTest(label):
                 path.write_bytes(data)
-                _, kinds = self.repo.kinds(base=self.base)
+                self.repo.commit(label)
+                report, kinds = self.repo.kinds(base=self.base)
                 self.assertIn((rel, Kind.BASE_CHANGED), kinds)
+                self.assertNotIn((rel, Kind.UNCOMMITTED), kinds)
         path.unlink()
+        self.repo.commit("deleted")
         _, kinds = self.repo.kinds(base=self.base)
         self.assertIn((rel, Kind.BASE_CHANGED), kinds)
         path.write_bytes(original)
@@ -358,13 +362,59 @@ class TamperTest(unittest.TestCase):
         idx = self.repo.sink.index_path
         idx.write_bytes(next_line((0, "genesis:index"), now=T0, run_id=RUN_A, seal=self.sealed.hash,
                                   commit=self.sealed.data["commit"]))
+        self.repo.commit("rewrite index")
         _, kinds = self.repo.kinds(base=self.base)
         self.assertIn((".audit/INDEX.jsonl", Kind.BASE_CHANGED), kinds)
 
     def test_base_accepts_lines_added_at_the_end(self):
         self.repo.start(RUN_B)
+        self.repo.commit("more")
         _, kinds = self.repo.kinds(base=self.base)
         self.assertEqual(kinds, [])
+
+    def test_uncommitted_edits_are_named_as_such(self):
+        path = self.repo.ledger(RUN_A)
+        path.write_bytes(path.read_bytes() + b"x")
+        _, kinds = self.repo.kinds(base=self.base)
+        self.assertIn((f".audit/runs/{RUN_A}/ledger.jsonl", Kind.UNCOMMITTED), kinds)
+
+    def symlink_attack(self, target):
+        """PR 1 swaps `target` for a symlink to a moved copy, bytes unchanged. PR 2 replaces the
+        symlink with a real folder holding rewritten history."""
+        real = self.repo.root / target
+        moved = self.repo.root / "hidden"
+        real.rename(moved)
+        real.symlink_to(moved.relative_to(real.parent, walk_up=True) if hasattr(Path, "walk_up") else
+                        Path("../" * (len(Path(target).parts) - 1)) / "hidden")
+        pr1 = self.repo.commit("pr1: symlink")
+        report, kinds = self.repo.kinds(base=self.base)
+        self.assertFalse(report.ok, f"PR 1 must already fail: {kinds}")
+        real.unlink()
+        moved.rename(real)
+        path = self.repo.ledger(RUN_A)
+        lines = path.read_bytes().splitlines(keepends=True)
+        path.write_bytes(lines[0])  # history cut back to genesis
+        (self.repo.sink.index_path).write_bytes(b"")
+        self.repo.commit("pr2: rewrite")
+        report, kinds = self.repo.kinds(base=pr1)
+        self.assertFalse(report.ok, "a rewrite behind a merged symlink must still fail")
+
+    def test_a_symlinked_audit_folder_cannot_hide_history(self):
+        self.symlink_attack(".audit")
+
+    def test_a_symlinked_runs_folder_cannot_hide_history(self):
+        self.symlink_attack(".audit/runs")
+
+    def test_a_gitattributes_conversion_cannot_change_what_merges(self):
+        (self.repo.root / ".gitattributes").write_text("*.jsonl working-tree-encoding=IBM037\n")
+        self.repo.start(RUN_B, n=0)
+        path = self.repo.ledger(RUN_A)
+        self.repo.git("add", "-A")
+        self.repo.git("commit", "-q", "-m", "pr: attributes")
+        self.repo.git("checkout", "-q", "--", ".")
+        report, kinds = self.repo.kinds(base=self.base)
+        self.assertFalse(report.ok, kinds)
+        self.assertIn((f".audit/runs/{RUN_A}/ledger.jsonl", Kind.BASE_CHANGED), kinds)
 
     def test_a_bad_base_ref_is_an_error(self):
         with self.assertRaises(_git.GitError):
@@ -441,6 +491,7 @@ class SealCliTest(unittest.TestCase):
         base = self.repo.commit()
         path = self.repo.ledger(RUN_A)
         path.write_bytes(path.read_bytes().replace(b"step 0", b"step X"))
+        self.repo.commit("tamper")
         code, out, _ = run_cli("verify", "--base", base, "--root", self.repo.root)
         self.assertEqual(code, 1)
         self.assertIn(f".audit/runs/{RUN_A}/ledger.jsonl:2: base-changed", out)

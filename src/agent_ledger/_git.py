@@ -65,3 +65,27 @@ def ls_tree(root: Path, commit: str, path: str) -> list[str]:
     prefix = _run(root, "rev-parse", "--show-prefix").stdout.decode().strip()
     names = [n.decode("utf-8", "surrogateescape") for n in proc.stdout.split(b"\0") if n]
     return [n[len(prefix):] for n in names if n.startswith(prefix)]
+
+
+def ls_tree_entries(root: Path, commit: str, path: str) -> list[tuple[str, str, str]]:
+    """(mode, object id, path relative to `root`) for every entry under `path` at `commit`,
+    including symlinks (120000) and submodules (160000), never following either."""
+    _object_id(commit)
+    proc = _run(root, "ls-tree", "-r", "-z", "--full-name", commit, "--", path)
+    prefix = _run(root, "rev-parse", "--show-prefix").stdout.decode().strip()
+    out = []
+    for record in proc.stdout.split(b"\0"):
+        if not record:
+            continue
+        meta, _, name = record.partition(b"\t")
+        mode, _kind, oid = meta.decode().split(" ")
+        name_s = name.decode("utf-8", "surrogateescape")
+        if name_s.startswith(prefix):
+            out.append((mode, oid, name_s[len(prefix):]))
+    return out
+
+
+def blob(root: Path, oid: str) -> bytes:
+    """A blob's stored bytes, with no filters, attributes or line-ending conversion."""
+    _object_id(oid)
+    return _run(root, "cat-file", "blob", oid).stdout

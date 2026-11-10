@@ -104,8 +104,10 @@ A chain on its own can't detect entries cut from the end, a suffix rewritten wit
 | A changed or cut line, or a deleted ledger, in a file that exists at the base | `base-changed` on the first differing line | `--base` |
 | Entries cut from the end of a merged run, or a merged suffix rewritten with recomputed hashes | `base-changed` | `--base` |
 | A merged ledger replaced by another valid chain | `base-changed` | `--base` |
+| A symlink or submodule anywhere in `.audit` (at HEAD, at the base, or on disk), or a symlinked run folder | `not-a-file` | |
+| A ledger or `INDEX.jsonl` on disk that isn't the committed file (an uncommitted edit, or a `.gitattributes` conversion) | `uncommitted` | `--base` |
 
-The base check covers every `ledger.jsonl` under `.audit/runs` and `.audit/INDEX.jsonl` that git lists at the base. Without `--base`, verify says so, since merged lines can then be cut or rewritten unnoticed. In CI the checkout needs full history (`fetch-depth: 0`) for the seal and base checks.
+The base check covers every `ledger.jsonl` under `.audit/runs` and `.audit/INDEX.jsonl` that git lists at the base, and it reads both sides as git objects (the base commit's blobs against HEAD's, by `ls-tree` with modes and `cat-file`), never the working tree. So a PR can't show the check one set of bytes and merge another: not by swapping a folder for a symlink, which would hide merged files from the next PR's check, and not by a `.gitattributes` encoding or line-ending conversion, which changes the committed bytes while the checkout looks the same. With `--base`, verify therefore checks committed work: commit first. Without `--base`, verify says so, since merged lines can then be cut or rewritten unnoticed. In CI the checkout needs full history (`fetch-depth: 0`) for the seal and base checks.
 
 ## The ledger CLI
 

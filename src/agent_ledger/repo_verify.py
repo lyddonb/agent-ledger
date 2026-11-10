@@ -68,9 +68,17 @@ def verify_repo(root: Path, base: str | None = None) -> RepoReport:
     base ref); a missing commit or file is a finding, not an error."""
     report = RepoReport()
     runs_dir = root / AUDIT_DIR / RUNS_DIR
+    # Whole-repo checks never follow a symlink in .audit: one could point the check at other
+    # files, or hide merged history from `--base` (see _check_base).
+    for folder in (root / AUDIT_DIR, runs_dir):
+        if folder.is_symlink():
+            report.add(folder.relative_to(root).as_posix(), 0, Kind.NOT_A_FILE, "is a symlink; .audit must be real folders")
+            return report
     if runs_dir.is_dir():
         for name in sorted(os.listdir(runs_dir)):
-            if (runs_dir / name).is_dir():
+            if (runs_dir / name).is_symlink():
+                report.add(f"{AUDIT_DIR}/{RUNS_DIR}/{name}", 0, Kind.NOT_A_FILE, "run folder is a symlink")
+            elif (runs_dir / name).is_dir():
                 report.runs[name] = verify_run(runs_dir / name)
 
     index_rel = f"{AUDIT_DIR}/{INDEX_FILE}"
@@ -133,19 +141,49 @@ def verify_repo(root: Path, base: str | None = None) -> RepoReport:
 
     if base is not None:
         report.base = _git.resolve(root, base)
-        for rel in _git.ls_tree(root, report.base, AUDIT_DIR):
-            if not (rel == index_rel or (rel.startswith(f"{AUDIT_DIR}/{RUNS_DIR}/") and rel.endswith("/" + LEDGER_FILE))):
-                continue
-            old = _git.show(root, report.base, rel)
-            path = root / rel
-            if old is None:
-                report.add(rel, 0, Kind.BASE_CHANGED, f"listed at {base} but git couldn't read it")
-                continue
-            new = path.read_bytes() if path.is_file() and not path.is_symlink() else None
-            if new is None:
-                report.add(rel, 0, Kind.BASE_CHANGED, f"exists at {base} but is gone or not a regular file")
-            elif not new.startswith(old):
-                line = _first_difference(old, new)
-                report.add(rel, line, Kind.BASE_CHANGED,
-                           f"line {line} differs from {base}, or lines were cut; merged lines are append-only")
+        _check_base(root, base, report)
     return report
+
+
+_TRACKED = (f"{AUDIT_DIR}/{INDEX_FILE}",)
+_LINKS = ("120000", "160000")  # symlink, submodule
+
+
+def _tracked(rel: str) -> bool:
+    return rel in _TRACKED or (rel.startswith(f"{AUDIT_DIR}/{RUNS_DIR}/") and rel.endswith("/" + LEDGER_FILE))
+
+
+def _check_base(root: Path, base: str, report: RepoReport) -> None:
+    """Merged history is append-only, judged entirely from git objects: the base commit's
+    blobs against HEAD's blobs, never the working tree, so a symlink, a submodule or a
+    .gitattributes conversion can't show the check one thing and merge another. The working
+    tree must also hold exactly HEAD's bytes, so the chain checks above saw what is committed."""
+    head = _git.resolve(root, "HEAD")
+    at_base = _git.ls_tree_entries(root, report.base, AUDIT_DIR)
+    at_head = {rel: (mode, oid) for mode, oid, rel in _git.ls_tree_entries(root, head, AUDIT_DIR)}
+    for where, entries in (("HEAD", at_head.items()), (base, ((r, (m, o)) for m, o, r in at_base))):
+        for rel, (mode, _oid) in entries:
+            if mode in _LINKS:
+                report.add(rel, 0, Kind.NOT_A_FILE, f"is a symlink or submodule at {where}; .audit must hold plain files")
+    for mode, oid, rel in at_base:
+        if not _tracked(rel) or mode in _LINKS:
+            continue
+        old = _git.blob(root, oid)
+        now = at_head.get(rel)
+        if now is None or now[0] in _LINKS:
+            report.add(rel, 0, Kind.BASE_CHANGED, f"exists at {base} but not as a file at HEAD")
+            continue
+        new = _git.blob(root, now[1])
+        if not new.startswith(old):
+            line = _first_difference(old, new)
+            report.add(rel, line, Kind.BASE_CHANGED,
+                       f"line {line} differs from {base}, or lines were cut; merged lines are append-only")
+    for rel, (mode, oid) in at_head.items():
+        if not _tracked(rel) or mode in _LINKS:
+            continue
+        path = root / rel
+        on_disk = path.read_bytes() if path.is_file() and not path.is_symlink() else None
+        if on_disk != _git.blob(root, oid):
+            report.add(rel, 0, Kind.UNCOMMITTED,
+                       "the working tree differs from the committed file (uncommitted edits, or a "
+                       ".gitattributes conversion); verify checks committed bytes")
