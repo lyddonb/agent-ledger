@@ -91,11 +91,11 @@ A chain on its own can't detect entries cut from the end, a suffix rewritten wit
 | Command | Does |
 |---|---|
 | `ledger init <slug> --actor A [--date D] [--why W]` | Creates the run folder (or uses an existing one) and the first entry, a `state` entry with `data` `{"state": "started"}`, chained to `genesis:<run-id>`. The run id is `<date>-<slug>`; the date defaults to today. Refuses a run that already has a ledger (built in M0 unit 2) |
-| `ledger append --run R --actor A --type T --summary S --why W [--evidence E]... [--data JSON]` | Redacts (from M0 unit 3), chains and writes one entry through each configured sink. Refuses a run whose ledger fails verify: exit 1 with the problems, as `verify` prints them (built in M0 unit 2) |
+| `ledger append --run R --actor A --type T --summary S --why W [--evidence E]... [--data JSON]` | Redacts summary, why, evidence and data (built in M0 unit 3), chains and writes one entry through each configured sink. Refuses a run whose ledger fails verify: exit 1 with the problems, as `verify` prints them (built in M0 unit 2) |
 | `ledger verify [--base origin/main]` | Checks every chain, that existing lines are unchanged relative to the base, and that each seal names a commit in history |
 | `ledger verify RUN_FOLDER` | Checks one run's chain (built in M0 unit 1). Exit 0 verified, 1 failed, 2 usage or read error |
 | `ledger show <run-id>` | Prints a readable table, newest last, after verifying the run; a run that fails verify prints the problems instead and exits 1 (built in M0 unit 2) |
-| `ledger session add <file>` | Redacts, compresses and stores a transcript, then appends a `session` entry with both hashes |
+| `ledger session add <file> --run R --actor A [--session ID] [--redact-pattern P]...` | Redacts, compresses and stores a transcript, then appends a `session` entry with both hashes. Exit 0 archived (or unchanged since the last add), 1 not archived because redaction couldn't be confirmed, 2 usage or read error (built in M0 unit 3) |
 | `ledger seal <run-id>` | Writes the `seal` entry (final hash and head commit) and appends it to `INDEX.jsonl` |
 | `ledger charter ...` | Charter commands from S1 |
 | `ledger import-tsv <file>` | Converts an old `decisions.tsv` trail into a run |
@@ -118,6 +118,15 @@ Every write goes through a sink interface with two calls, `write(entry)` and `se
 - Before writing, the transcript is redacted with built-in secret patterns plus the policy's `redact_patterns`. The entry stores the hash of the raw transcript and of the redacted file, so integrity can be proven later without keeping the raw copy in git.
 - Files over the policy's `lfs_over_mb` go to Git LFS.
 - If redaction can't be confirmed (the scanner errors, or a pattern match survives), the transcript stays out of git and the entry records where it is.
+
+How it works (M0 unit 3, `agent_ledger.redact`):
+
+- **Patterns.** Built-in patterns cover private keys, vendor keys and tokens (Anthropic, OpenAI, GitHub, GitLab, AWS, Google, Slack, Stripe, npm), JWTs, bearer tokens, passwords in URLs, and `password=`/`api_key:`/`token=`-style assignments. They lean wide: over-redacting a transcript is cheap, a miss can't be undone. A replaced secret reads `[REDACTED:<pattern>]`; policy patterns are named `policy_1`, `policy_2` and so on.
+- **Policy patterns.** `security.redact_patterns` is read from `~/.agents/policy.yaml` and the repo's `.agents/policy.yaml`, and the two lists are unioned, plus any `--redact-pattern` flags. The standard library has no YAML parser, so the reader takes only `redact_patterns: []` or a block list of single-quoted strings (single quotes keep regex backslashes literal). Any other shape, or an invalid regex, stops the command with exit 2 rather than dropping a pattern.
+- **Confirmation.** Spans from every pattern are found in the original text and merged, so overlapping patterns leave no fragment. Redacting the result again must change nothing. Each line that parses as JSON also has every decoded string scanned; a line whose decoded strings still match (a secret behind a JSON escape, or in JSON nested in a string) is rebuilt from its value with every string redacted, then checked again. A match that survives all of that, or a transcript that isn't UTF-8, means unconfirmed.
+- **The `session` entry.** `data` holds `session_id`, `raw_sha256` and `raw_bytes`, then either `archived: true` with `path` (repo-relative), `redacted_sha256` (of the redacted text before compression, so `gunzip -c <path> | shasum -a 256` checks it) and `redactions` (pattern name to count), or `archived: false` with `location` (the transcript's absolute path) and `reason`. Archives are gzip with no name or time in the header, so the same text gives the same bytes.
+- **Re-adding.** A transcript is archived on pause and again at close. Adding one whose raw hash matches the latest entry for that session writes nothing; a changed one replaces the archive file and appends a new entry, so every version's hashes stay in the chain.
+- **Not yet.** Routing archives over `lfs_over_mb` to Git LFS needs policy reading for `audit.sessions` (M0 unit 7); until then an archive over 20 MB compressed only prints a warning.
 
 ## CI check
 
