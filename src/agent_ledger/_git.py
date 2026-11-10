@@ -13,12 +13,15 @@ class GitError(Exception):
 
 
 def _run(root: Path, *args: str, ok_codes: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
-    # A fixed environment: no pager, no prompts, no user config that could rewrite output.
+    # A fixed environment: no system or global config, no replace refs, no prompts, no lazy
+    # fetches, no fsmonitor hook. The repo's own .git/config still applies; a pull request
+    # can't change it, since git never commits a .git path.
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env.update(GIT_TERMINAL_PROMPT="0", GIT_CONFIG_NOSYSTEM="1", LC_ALL="C")
+    env.update(GIT_TERMINAL_PROMPT="0", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1", LC_ALL="C")
     try:
-        proc = subprocess.run(["git", "-C", str(root), "--no-pager", *args], capture_output=True, env=env,
-                              timeout=120)
+        proc = subprocess.run(["git", "-C", str(root), "--no-pager", "-c", "core.fsmonitor=false", *args],
+                              capture_output=True, env=env, timeout=120)
     except FileNotFoundError:
         raise GitError("git is not installed") from None
     except subprocess.TimeoutExpired:
@@ -50,21 +53,14 @@ def is_ancestor(root: Path, commit: str, of: str = "HEAD") -> bool:
     return proc.returncode == 0
 
 
-def show(root: Path, commit: str, path: str) -> bytes | None:
-    """The bytes of `path` (relative to `root`) at `commit`, or None when it isn't there."""
-    _object_id(commit)
-    proc = _run(root, "show", f"{commit}:./{path}", ok_codes=(0, 128))
-    return proc.stdout if proc.returncode == 0 else None
-
-
-def ls_tree(root: Path, commit: str, path: str) -> list[str]:
-    """Files under `path` at `commit`, relative to `root`."""
-    _object_id(commit)
-    # -z: names come back raw and NUL-separated, never quoted, so an odd name can't slip past.
-    proc = _run(root, "ls-tree", "-r", "-z", "--name-only", "--full-name", commit, "--", path)
-    prefix = _run(root, "rev-parse", "--show-prefix").stdout.decode().strip()
-    names = [n.decode("utf-8", "surrogateescape") for n in proc.stdout.split(b"\0") if n]
-    return [n[len(prefix):] for n in names if n.startswith(prefix)]
+def file_at(root: Path, commit: str, path: str) -> bytes | None:
+    """The stored bytes of `path` (relative to `root`) at `commit`: None unless it is a plain
+    file there. Read the same way as the base check (ls-tree, then cat-file), so a seal is
+    judged on exactly the bytes that merge."""
+    for mode, oid, rel in ls_tree_entries(root, commit, path):
+        if rel == path:
+            return blob(root, oid) if mode in ("100644", "100755") else None
+    return None
 
 
 def ls_tree_entries(root: Path, commit: str, path: str) -> list[tuple[str, str, str]]:

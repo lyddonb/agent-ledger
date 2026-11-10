@@ -381,6 +381,8 @@ class TamperTest(unittest.TestCase):
     def symlink_attack(self, target):
         """PR 1 swaps `target` for a symlink to a moved copy, bytes unchanged. PR 2 replaces the
         symlink with a real folder holding rewritten history."""
+        self.repo.start(RUN_B)
+        self.base = self.repo.commit("unsealed run b")
         real = self.repo.root / target
         moved = self.repo.root / "hidden"
         real.rename(moved)
@@ -391,13 +393,14 @@ class TamperTest(unittest.TestCase):
         self.assertFalse(report.ok, f"PR 1 must already fail: {kinds}")
         real.unlink()
         moved.rename(real)
-        path = self.repo.ledger(RUN_A)
-        lines = path.read_bytes().splitlines(keepends=True)
-        path.write_bytes(lines[0])  # history cut back to genesis
-        (self.repo.sink.index_path).write_bytes(b"")
+        index = self.repo.sink.index_path.read_bytes()
+        path = self.repo.ledger(RUN_B)  # unsealed, so only the base check protects it
+        path.write_bytes(path.read_bytes().splitlines(keepends=True)[0])  # cut back to genesis
         self.repo.commit("pr2: rewrite")
+        self.assertEqual(self.repo.sink.index_path.read_bytes(), index)
         report, kinds = self.repo.kinds(base=pr1)
         self.assertFalse(report.ok, "a rewrite behind a merged symlink must still fail")
+        self.assertTrue({k for _, k in kinds} & {Kind.NOT_A_FILE, Kind.BASE_CHANGED}, kinds)
 
     def test_a_symlinked_audit_folder_cannot_hide_history(self):
         self.symlink_attack(".audit")
@@ -435,7 +438,8 @@ class IndexFormatTest(unittest.TestCase):
             out.append(line)
         return out
 
-    def test_any_changed_byte_deleted_or_swapped_line_is_detected(self):
+    def test_any_changed_byte_or_swapped_line_and_any_deleted_line_but_the_last_is_detected(self):
+        # A cut last line leaves a valid shorter index; `verify --base` catches that.
         for seed in range(40):
             rng = random.Random(seed)
             lines = self.build(rng.randint(2, 6), rng)
@@ -483,9 +487,11 @@ class SealCliTest(unittest.TestCase):
         self.assertIn("nothing to do", out)
 
     def test_uncommitted_ledger_is_exit_2_with_the_reason(self):
+        self.repo.commit()
+        append(self.repo.sink, RUN_A, actor=AGENT, type=EntryType.DECISION, summary="late", why="w")
         code, _, err = run_cli("seal", RUN_A, "--actor", self.actor, "--root", self.repo.root)
         self.assertEqual(code, 2)
-        self.assertIn("commit", err)
+        self.assertIn("aren't committed at HEAD", err)
 
     def test_verify_fails_with_exit_1_and_names_the_line(self):
         base = self.repo.commit()

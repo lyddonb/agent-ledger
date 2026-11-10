@@ -184,7 +184,7 @@ def seal_run(sink: RepoSink, root: Path, run_id: str, *, actor: Actor, why: str 
     ledger = sink.run_dir(run_id) / "ledger.jsonl"
     rel = ledger.relative_to(root).as_posix()
     commit = _git.resolve(root, "HEAD")
-    committed = _git.show(root, commit, rel)
+    committed = _git.file_at(root, commit, rel)
     if committed is None or committed != ledger.read_bytes():
         raise LedgerError(f"{rel} has changes that aren't committed at HEAD; commit the ledger, then seal, "
                           f"so the seal's commit holds the head it names")

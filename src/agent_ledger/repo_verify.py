@@ -133,7 +133,7 @@ def verify_repo(root: Path, base: str | None = None) -> RepoReport:
                        f"the seal names commit {str(commit)[:12]}, which is not in HEAD's history "
                        f"(a squash or rebase merge drops it; merge with a merge commit)")
             continue
-        then = _git.show(root, commit, rel)
+        then = _git.file_at(root, commit, rel)
         held = verify_bytes(run_id, then) if then is not None else None
         if not isinstance(held, Verified) or held.head.link != seal.prev:
             report.add(rel, seal.seq, Kind.SEAL_COMMIT,
