@@ -105,6 +105,10 @@ class Redactor:
             except re.error as e:
                 raise PolicyError(f"redact pattern {i} {source!r} is not a valid regex: {e}") from None
         self.patterns: tuple[Pattern, ...] = tuple(patterns)
+        # Only placeholders this redactor writes count as redacted, so a token dressed up as
+        # `[REDACTED:ghp_...]` still matches.
+        names = sorted({p.name for p in self.patterns}, key=len, reverse=True)
+        self._placeholder_re = re.compile(r"\[REDACTED:(?:" + "|".join(map(re.escape, names)) + r")\]")
         # Names the exact pattern set, so an archive made with other patterns gets redone.
         self.fingerprint = hashlib.sha256(
             "\n".join(f"{p.name}\t{p.regex.pattern}" for p in self.patterns).encode()).hexdigest()
@@ -134,12 +138,12 @@ class Redactor:
 
     def _leftover(self, text: str) -> str | None:
         """The name of a pattern that still finds something outside placeholders, or None."""
-        covered = [(m.start(), m.end()) for m in _PLACEHOLDER_RE.finditer(text)]
+        # Blank out placeholders (same length, so spans line up), then a span matters if any
+        # of its characters is left: linear in the text, however many placeholders there are.
+        masked = self._placeholder_re.sub(lambda m: " " * len(m.group()), text)
         for p in self.patterns:
             for s, e in p.spans(text):
-                rest = "".join(text[i] for i in range(s, e)
-                               if not any(a <= i < b for a, b in covered))
-                if rest.strip():
+                if masked[s:e].strip():
                     return p.name
         return None
 
@@ -328,7 +332,7 @@ def _strip_comment(rest: str) -> str:
     return "" if rest.startswith("#") else re.sub(r"\s+#.*$", "", rest)
 
 
-def read_policy_patterns(path: Path) -> list[str]:
+def read_policy_patterns(path: Path, text: str | None = None) -> list[str]:
     """`security.redact_patterns` from one policy file.
 
     There is no YAML parser in the standard library, so this reads only the shapes the policy
@@ -337,7 +341,7 @@ def read_policy_patterns(path: Path) -> list[str]:
     pattern list would silently drop a pattern the policy author relies on.
     """
     try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
+        lines = (text if text is not None else path.read_text(encoding="utf-8-sig")).splitlines()
     except (OSError, UnicodeDecodeError) as e:
         raise PolicyError(f"{path}: can't read: {e}") from None
     mentions = [i for i, line in enumerate(lines)
@@ -403,3 +407,19 @@ def policy_patterns(root: Path, user_policy: Path | None = None) -> list[str]:
                 if pattern not in found:
                     found.append(pattern)
     return found
+
+
+def base_policy_patterns(root: Path, base: str) -> list[str]:
+    """Redact patterns from the project policy as committed at `base`. With `--base`, these are
+    added to the working policy's, so a change can't remove a pattern and leak what it matched
+    in the same pull request."""
+    from . import _git
+    rel = POLICY_FILES[0].as_posix()
+    data = _git.file_at(root, _git.resolve(root, base), rel)
+    if data is None:
+        return []
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise PolicyError(f"{rel} at {base}: not UTF-8") from None
+    return read_policy_patterns(Path(f"{rel} at {base}"), text)

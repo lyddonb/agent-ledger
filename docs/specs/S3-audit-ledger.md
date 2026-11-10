@@ -157,24 +157,36 @@ How it works (M0 unit 3, `agent_ledger.redact`):
 
 This repo ships a GitHub Action, `ledger-verify`, that runs `ledger verify --base <target branch>` and a secret scan over `.audit/` on every PR. It fails when a chain breaks, a past line changed, or a secret appears. With branch protection that forbids force-pushes to `main`, the merged history is the project-level chain.
 
-Built in M0 unit 6. Add it to a project's workflow:
+Built in M0 unit 6. A pull request controls any workflow that runs from it (`pull_request` runs the merge commit's own workflow files and local actions), so the check to require runs from `pull_request_target`: the workflow and the Action come from the base branch, and the pull request's merge commit is checked out as data and never executed. Add it to a project like this:
 
 ```yaml
-on: [pull_request, push]
+on:
+  push: {branches: [main]}
+  pull_request_target:
+  merge_group:
 permissions: {contents: read}
 jobs:
   ledger-verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 0}   # seals and --base need the full history
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          path: checked
+          fetch-depth: 0              # seals and --base need the full history
+          persist-credentials: false
       - uses: lyddonb/agent-ledger@<commit or tag>
+        with: {root: checked}
 ```
 
-- **Base.** On a pull request the base is `origin/<base branch>`, checked against the merge commit GitHub checks out, so a branch behind main is still compared with main's current lines. On a push it is the commit before the push, so pushes to `main` are append-only too. A push that creates a branch has no base: verify still checks every chain and seal, with a warning. Override with the `base` input.
+Never add a step that runs code from `checked` (a build, a test, a script): under `pull_request_target` that would run the pull request's code with the base branch's trust. Then require `ledger-verify` on the default branch.
+
+- **Base.** For a pull request, the merge commit's first parent: the base branch as GitHub merged it, so a base branch that moved on since can't fail an honest change. The Action checks that parent is on `origin/<base>` and refuses a checkout that isn't a merge commit. For a merge queue, the queue's base; for a push, the commit before it. A push that creates a branch has no base: verify still checks every chain and seal, with a warning. Any other event with no base fails; pass the `base` input.
 - **What runs.** `ledger verify --base` (chains, index, seals, append-only) and `ledger scan --base` (secrets in the `.audit` files the change touches). Both run, and either failing fails the job.
-- **`ledger scan`.** Every line of every file under `.audit` (session archives decompressed as a stream capped at 2 GB) is checked in each decoded view the redactor confirms with, using the built-in patterns and the project's `.agents/policy.yaml`. A finding names the file, line and pattern, never the text. A file that can't be read, is binary, exceeds the cap or is a symlink or submodule is a finding, since it can't be shown clean. Without `--base` it scans every file under `.audit` on disk.
-- **Untrusted pull requests.** The Action runs the CLI from its own pinned copy with `python -I`, so the repo under check can't put its own `agent_ledger` package or a `sitecustomize.py` in the way; pin it by commit or tag. Every workflow expression reaches the shell through `env`, and the job needs only `contents: read`. This repo checks itself with `uses: ./`, the Action from the same commit, which a pull request could edit; its separate test workflow and review cover that.
+- **`ledger scan`.** Every line of every file under `.audit` is checked in each decoded view the redactor confirms with. The patterns are the built-ins plus the project's `.agents/policy.yaml` both at the base and in the change, so a change can't remove a pattern and leak what it matched in the same pull request. Only placeholders naming a real pattern count as redacted, so a token can't hide inside a fake `[REDACTED:...]`. A finding names the file, line and pattern, never the text. A file that can't be read, is binary, is a symlink or submodule, or is too large (512 MB, 5 million lines or a 64 MB line, archives decompressed as a capped stream) is a finding, since it can't be shown clean. One file may take 10 minutes and the whole scan 25; past that the rest is a finding, so a hostile change fails the check instead of holding a runner. Without `--base` it scans every file under `.audit` on disk.
+- **The runner.** The Action runs the CLI from its own copy with `python -I`, so even the checked repo's own `agent_ledger` package or `sitecustomize.py` on `PYTHONPATH` can't replace it. Every workflow expression reaches the shell through `env`, and the job needs only `contents: read`.
+- **This repo.** `ledger-verify` runs the base branch's Action as above. A second job, `ledger-verify-self`, runs a pull request's own Action under `pull_request` so changes to the Action are exercised before they merge; it can be edited by the pull request it checks, so it is never the required check. A pull request that adds or changes the workflow is checked by the base branch's version until it merges.
 
 ## Migration
 

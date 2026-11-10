@@ -19,7 +19,7 @@ from ._canon import CanonError, parse_value
 from .charter import (CHARTER_FILE, CharterError, approval_status, approve_charter, check_charter,
                       new_charter, read_charter)
 from .entry import Actor, EntryError, EntryType, HumanActor, _actor_from_wire
-from .redact import PolicyError, Redactor, policy_patterns
+from .redact import PolicyError, Redactor, base_policy_patterns, policy_patterns
 from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, seal_run, utc_now
 from ._git import GitError
 from .repo_verify import verify_repo
@@ -460,8 +460,11 @@ def _add_scan_args(p: argparse.ArgumentParser) -> None:
 def _scan(ns: argparse.Namespace) -> int:
     try:
         root = _root(ns)
-        count, findings = scan_repo(root, _redactor(ns), ns.base)
-    except (GitError, LedgerError, OSError) as e:
+        redactor = _redactor(ns)
+        if ns.base:
+            redactor = Redactor([*base_policy_patterns(root, ns.base), *policy_patterns(root), *ns.redact_pattern])
+        count, findings = scan_repo(root, redactor, ns.base)
+    except (GitError, LedgerError, OSError, PolicyError) as e:
         print(f"ledger scan: {e}", file=sys.stderr)
         return EXIT_ERROR
     for f in findings:

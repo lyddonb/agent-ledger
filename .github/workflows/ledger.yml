@@ -1,20 +1,51 @@
 name: ledger
 
+# Two jobs. `ledger-verify` is the check to require: on a pull request it runs from
+# pull_request_target, so the workflow and the Action come from the base branch and a pull
+# request can't edit what checks it. It checks out the pull request's merge commit as data
+# and never runs code from it. `ledger-verify-self` runs this pull request's own Action, so
+# changes to the Action get exercised before they merge; it proves nothing about trust.
+
 on:
   push:
     branches: [main]
+  pull_request_target:
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
 
 jobs:
   ledger-verify:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: The Action, from the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: The change to check (data only)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          path: checked
+          fetch-depth: 0  # seals and --base need the full history
+          persist-credentials: false
+      - uses: ./trusted
+        with:
+          root: checked
+
+  ledger-verify-self:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # seals and --base need the full history
-      # This repo checks itself with the Action from the same commit. Other repos pin it:
-      # uses: lyddonb/agent-ledger@<commit or tag>
+          fetch-depth: 0
+          persist-credentials: false
       - uses: ./

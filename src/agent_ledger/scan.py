@@ -12,6 +12,7 @@ import gzip
 import io
 import os
 import stat
+import time
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,8 +24,13 @@ from .redact import Redactor
 AUDIT_DIR = ".audit"
 # A transcript archive is decompressed as a stream with this cap, so a crafted gzip can't
 # exhaust memory or time; real sessions are well under it.
-MAX_DECOMPRESSED = 2 * 1024 ** 3
+MAX_DECOMPRESSED = 512 * 1024 ** 2
 MAX_LINE = 64 * 1024 ** 2
+MAX_LINES = 5_000_000
+# Seconds one file may take; past it the file is a finding rather than a stuck CI job.
+MAX_SECONDS = 600
+# Seconds a whole scan may take, under the 30-minute job limit the docs set.
+MAX_TOTAL_SECONDS = 1500
 _LINKS = ("120000", "160000")
 
 
@@ -43,7 +49,7 @@ def _lines(name: str, data: bytes) -> Iterator[tuple[int, str] | str]:
             total = 0
             for n, raw in enumerate(iter(lambda: stream.readline(MAX_LINE + 1), b""), 1):
                 total += len(raw)
-                if total > MAX_DECOMPRESSED or len(raw) > MAX_LINE:
+                if total > MAX_DECOMPRESSED or len(raw) > MAX_LINE or n > MAX_LINES:
                     yield "too large to scan when decompressed"
                     return
                 try:
@@ -54,22 +60,40 @@ def _lines(name: str, data: bytes) -> Iterator[tuple[int, str] | str]:
         except (OSError, EOFError, zlib.error):
             yield "not a readable gzip file"
         return
+    if len(data) > MAX_DECOMPRESSED:
+        yield "too large to scan"
+        return
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
         yield "not UTF-8 text"
         return
-    for n, line in enumerate(text.split("\n"), 1):
+    start = 0
+    for n in range(1, MAX_LINES + 2):
+        end = text.find("\n", start)
+        line = text[start:] if end == -1 else text[start:end]
+        if len(line) > MAX_LINE or n > MAX_LINES:
+            yield "too large to scan (a line or the line count is over the cap)"
+            return
         yield n, line
+        if end == -1:
+            return
+        start = end + 1
 
 
 def scan_bytes(rel: str, data: bytes, redactor: Redactor) -> list[Finding]:
     out = []
+    deadline = time.monotonic() + MAX_SECONDS
     for item in _lines(rel, data):
         if isinstance(item, str):
             out.append(Finding(rel, 0, item))
             break
         n, line = item
+        if not line.strip():
+            continue
+        if time.monotonic() > deadline:
+            out.append(Finding(rel, 0, f"took over {MAX_SECONDS} s to scan"))
+            break
         name = redactor.find(line)
         if name is not None:
             out.append(Finding(rel, n, name))
@@ -100,9 +124,9 @@ def _changed(root: Path, base: str) -> Iterator[tuple[str, bytes | None]]:
     """(path, committed bytes) for every file under .audit at HEAD that is new or differs from
     `base`, read as git objects like `verify --base`."""
     base_id, head = _git.resolve(root, base), _git.resolve(root, "HEAD")
-    before = {rel: oid for _m, oid, rel in _git.ls_tree_entries(root, base_id, AUDIT_DIR)}
+    before = {rel: (mode, oid) for mode, oid, rel in _git.ls_tree_entries(root, base_id, AUDIT_DIR)}
     for mode, oid, rel in _git.ls_tree_entries(root, head, AUDIT_DIR):
-        if before.get(rel) == oid:
+        if before.get(rel) == (mode, oid):  # a mode change (file to symlink) counts as changed
             continue
         yield rel, None if mode in _LINKS else _git.blob(root, oid)
 
@@ -112,7 +136,11 @@ def scan_repo(root: Path, redactor: Redactor, base: str | None = None) -> tuple[
     committed files under .audit that changed since `base`."""
     files: Iterable[tuple[str, bytes | None]] = _changed(root, base) if base else _walk(root)
     count, out = 0, []
+    deadline = time.monotonic() + MAX_TOTAL_SECONDS
     for rel, data in files:
+        if time.monotonic() > deadline:
+            out.append(Finding(rel, 0, f"not scanned: the scan ran past its {MAX_TOTAL_SECONDS} s budget"))
+            break
         count += 1
         if data is None:
             out.append(Finding(rel, 0, "a symlink, submodule or special file; .audit holds plain files"))

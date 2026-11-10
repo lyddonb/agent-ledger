@@ -75,6 +75,26 @@ class ScanTest(unittest.TestCase):
         self.assertIn((f".audit/runs/{RUN_A}/sessions/big.jsonl.gz", 0, "too large to scan when decompressed"),
                       self.kinds())
 
+    def test_oversized_plain_files_and_lines_are_findings_not_ooms(self):
+        (self.run_dir / "long.md").write_text("a" * 3000 + "\n")
+        old = scan.MAX_LINE
+        scan.MAX_LINE = 2000
+        self.addCleanup(setattr, scan, "MAX_LINE", old)
+        self.assertTrue(any(p.endswith("long.md") and "too large" in w for p, _, w in self.kinds()))
+
+    def test_a_scan_past_its_time_budget_is_a_finding(self):
+        old = scan.MAX_TOTAL_SECONDS
+        scan.MAX_TOTAL_SECONDS = -1
+        self.addCleanup(setattr, scan, "MAX_TOTAL_SECONDS", old)
+        self.assertTrue(any("budget" in w for _, _, w in self.kinds()))
+
+    def test_a_long_line_of_placeholders_scans_in_linear_time(self):
+        import time
+        line = "[REDACTED:anthropic_key] " * 200_000
+        start = time.perf_counter()
+        self.assertIsNone(Redactor().find(line))
+        self.assertLess(time.perf_counter() - start, 5.0)
+
     def test_base_scans_only_committed_changes(self):
         (self.run_dir / "old.md").write_text(f"{FAKE_KEY}\n")
         base = self.repo.commit("a secret already merged")
@@ -102,6 +122,7 @@ class RunnerTest(unittest.TestCase):
         fake.mkdir()
         (fake / "__init__.py").write_text("")
         (fake / "cli.py").write_text("import sys\nprint('HIJACKED')\ndef main(argv): return 0\n")
+        (repo.root / "sitecustomize.py").write_text("print('HIJACKED')\n")  # runs at startup unless -I
         proc = subprocess.run([sys.executable, "-I", str(ROOT / "ci/run_ledger.py"), "verify", "--root", str(repo.root)],
                               cwd=repo.root, env=dict(os.environ, PYTHONPATH=str(repo.root)), capture_output=True, text=True)
         self.assertNotIn("HIJACKED", proc.stdout)
@@ -122,52 +143,119 @@ def _action_script():
 
 
 class ActionScriptTest(unittest.TestCase):
-    """Runs the Action's step on a real repo, with `python` pointing at this interpreter."""
+    """Runs the Action's step on real repos, with `python` pointing at this interpreter. A pull
+    request is checked at a merge commit, as GitHub builds refs/pull/<n>/merge."""
 
     def setUp(self):
         self.repo = GitRepo(self)
         self.repo.start(RUN_A)
-        self.repo.commit("main")
-        self.repo.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        self.main = self.repo.commit("main")
         self.bin = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.bin)
         (self.bin / "python").symlink_to(sys.executable)
 
+    def pr(self, change, main_moves=None):
+        """Make a branch with `change`, optionally advance main with `main_moves`, then check out
+        GitHub's merge commit (main as first parent) and point origin/main at main."""
+        self.repo.git("checkout", "-q", "-b", "pr", self.main)
+        change()
+        self.repo.commit("pr")
+        self.repo.git("checkout", "-q", "main")
+        if main_moves:
+            main_moves()
+            self.repo.commit("main moved")
+        self.repo.git("update-ref", "refs/remotes/origin/main", "main")
+        self.repo.git("checkout", "-q", "--detach", "main")
+        self.repo.git("merge", "-q", "--no-ff", "-m", "Merge pr", "pr")
+
+    def more(self, summary="more"):
+        append(self.repo.sink, RUN_A, actor=AGENT, type=EntryType.DECISION, summary=summary, why="w")
+
     def run_step(self, **env):
         full = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", GITHUB_WORKSPACE=str(self.repo.root),
-                    RUNNER_SCRIPT=str(ROOT / "ci/run_ledger.py"), BASE_INPUT="", PR_BASE="", PUSH_BEFORE="")
+                    RUNNER_SCRIPT=str(ROOT / "ci/run_ledger.py"), ROOT_INPUT=".", BASE_INPUT="", EVENT="push",
+                    PR_BASE="", MERGE_GROUP_BASE="", PUSH_BEFORE="")
         full.update(env)
         return subprocess.run(["bash", "-c", _action_script()], cwd=self.repo.root, env=full,
                               capture_output=True, text=True)
 
-    def test_a_pull_request_is_checked_against_its_base_branch(self):
-        append(self.repo.sink, RUN_A, actor=AGENT, type=EntryType.DECISION, summary="more", why="w")
-        self.repo.commit("pr")
-        proc = self.run_step(PR_BASE="main")
+    def run_pr(self, **env):
+        return self.run_step(EVENT="pull_request_target", PR_BASE="main", **env)
+
+    def test_a_pull_request_is_checked_against_the_merge_base(self):
+        self.pr(self.more)
+        proc = self.run_pr()
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("merged lines unchanged since origin/main", proc.stdout)
-        self.assertIn("ok: no secrets in 1 files changed since origin/main", proc.stdout)
+        self.assertIn(f"merged lines unchanged since {self.repo.git('rev-parse', 'main').strip()}", proc.stdout)
+        self.assertIn("ok: no secrets in 1 files changed", proc.stdout)
+
+    def test_a_base_that_moved_on_doesnt_fail_an_honest_pr(self):
+        # GitHub built the merge ref, then main got another entry: origin/main is ahead of it.
+        self.pr(lambda: (self.repo.start("2026-11-09-bravo")))
+        self.repo.git("checkout", "-q", "main")
+        self.more("later on main")
+        self.repo.commit("main moved after the merge ref")
+        self.repo.git("update-ref", "refs/remotes/origin/main", "main")
+        self.repo.git("checkout", "-q", "--detach", "HEAD@{2}")
+        self.assertEqual(self.repo.git("log", "-1", "--format=%s").strip(), "Merge pr")
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_the_pr_head_instead_of_its_merge_commit_is_refused(self):
+        self.repo.git("checkout", "-q", "-b", "pr")
+        self.more()
+        self.repo.commit("pr")
+        self.repo.git("update-ref", "refs/remotes/origin/main", self.main)
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("merge commit", proc.stdout)
 
     def test_a_rewritten_merged_line_fails_the_job(self):
         path = self.repo.ledger(RUN_A)
-        path.write_bytes(path.read_bytes().replace(b"step 0", b"step X"))
-        self.repo.commit("rewrite")
-        proc = self.run_step(PR_BASE="main")
+        self.pr(lambda: path.write_bytes(path.read_bytes().replace(b"step 0", b"step X")))
+        proc = self.run_pr()
         self.assertEqual(proc.returncode, 1)
         self.assertIn("base-changed", proc.stdout)
         self.assertIn("::error::ledger-verify failed", proc.stdout)
 
     def test_a_secret_fails_the_job_even_when_verify_passes(self):
-        (self.repo.sink.run_dir(RUN_A) / "notes.md").write_text(FAKE_KEY + "\n")
-        self.repo.commit("secret")
-        proc = self.run_step(PR_BASE="main")
+        self.pr(lambda: (self.repo.sink.run_dir(RUN_A) / "notes.md").write_text(FAKE_KEY + "\n"))
+        proc = self.run_pr()
         self.assertEqual(proc.returncode, 1)
         self.assertIn("merged lines unchanged", proc.stdout, "verify still ran and passed")
         self.assertIn("secret: a anthropic_key match", proc.stdout)
 
+    def test_removing_a_redact_pattern_cant_hide_its_secret(self):
+        policy = self.repo.root / ".agents" / "policy.yaml"
+        policy.parent.mkdir()
+        policy.write_text("security:\n  redact_patterns:\n    - '\\bacme_[a-z0-9]{32}\\b'\n")
+        self.main = self.repo.commit("policy")
+
+        def leak():
+            policy.write_text("security:\n  redact_patterns: []\n")
+            (self.repo.sink.run_dir(RUN_A) / "notes.md").write_text("acme_" + "q" * 32 + "\n")
+
+        self.pr(leak)
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("policy_1 match", proc.stdout)
+
+    def test_a_token_inside_a_fake_placeholder_is_found(self):
+        token = "gh" + "p_" + "a1b2" * 9
+        self.pr(lambda: (self.repo.sink.run_dir(RUN_A) / "notes.md").write_text(f"[REDACTED:{token}]\n"))
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("github_token match", proc.stdout)
+
+    def test_a_merge_queue_uses_its_base(self):
+        self.pr(self.more)
+        proc = self.run_step(EVENT="merge_group", MERGE_GROUP_BASE=self.repo.git("rev-parse", "main").strip())
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("merged lines unchanged since", proc.stdout)
+
     def test_a_push_uses_the_commit_before_it(self):
         before = self.repo.git("rev-parse", "HEAD").strip()
-        append(self.repo.sink, RUN_A, actor=AGENT, type=EntryType.DECISION, summary="more", why="w")
+        self.more()
         self.repo.commit("push")
         proc = self.run_step(PUSH_BEFORE=before)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -176,7 +264,20 @@ class ActionScriptTest(unittest.TestCase):
     def test_a_new_branch_push_warns_and_checks_chains(self):
         proc = self.run_step(PUSH_BEFORE="0" * 40)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("::warning::no base", proc.stdout)
+        self.assertIn("::warning::this push creates the branch", proc.stdout)
+        self.assertIn("ok: 1 runs", proc.stdout)
+
+    def test_another_event_without_a_base_fails(self):
+        proc = self.run_step(EVENT="workflow_dispatch")
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("no base for a workflow_dispatch event", proc.stdout)
+
+    def test_the_root_input_checks_a_separate_checkout(self):
+        outer = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outer)
+        subprocess.run(["git", "clone", "-q", str(self.repo.root), str(outer / "checked")], check=True)
+        proc = self.run_step(GITHUB_WORKSPACE=str(outer), ROOT_INPUT="checked", PUSH_BEFORE="0" * 40)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("ok: 1 runs", proc.stdout)
 
     def test_a_shallow_clone_is_refused(self):
@@ -185,28 +286,42 @@ class ActionScriptTest(unittest.TestCase):
         self.repo.commit("second")
         subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{self.repo.root}", str(shallow / "c")],
                        check=True, capture_output=True)
-        full = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", GITHUB_WORKSPACE=str(shallow / "c"),
-                    RUNNER_SCRIPT=str(ROOT / "ci/run_ledger.py"), BASE_INPUT="", PR_BASE="main", PUSH_BEFORE="")
-        proc = subprocess.run(["bash", "-c", _action_script()], cwd=shallow / "c", env=full,
-                              capture_output=True, text=True)
+        proc = self.run_step(GITHUB_WORKSPACE=str(shallow / "c"), EVENT="pull_request_target", PR_BASE="main")
         self.assertEqual(proc.returncode, 1)
         self.assertIn("fetch-depth: 0", proc.stdout)
 
     def test_the_step_cannot_be_hijacked_by_the_checked_repo(self):
-        fake = self.repo.root / "agent_ledger"
-        fake.mkdir()
-        (fake / "__init__.py").write_text("")
-        (fake / "cli.py").write_text("print('HIJACKED')\ndef main(argv): return 0\n")
-        (self.repo.root / "ci").mkdir()
-        (self.repo.root / "ci" / "run_ledger.py").write_text("print('HIJACKED')\n")
-        (self.repo.root / "sitecustomize.py").write_text("print('HIJACKED')\n")  # runs at startup unless -I
-        proc = self.run_step(PR_BASE="main", PYTHONPATH=str(self.repo.root))
+        def plant():
+            fake = self.repo.root / "agent_ledger"
+            fake.mkdir()
+            (fake / "__init__.py").write_text("")
+            (fake / "cli.py").write_text("print('HIJACKED')\ndef main(argv): return 0\n")
+            (self.repo.root / "ci").mkdir()
+            (self.repo.root / "ci" / "run_ledger.py").write_text("print('HIJACKED')\n")
+            (self.repo.root / "sitecustomize.py").write_text("print('HIJACKED')\n")  # runs at startup unless -I
+        self.pr(plant)
+        proc = self.run_pr(PYTHONPATH=str(self.repo.root))
         self.assertNotIn("HIJACKED", proc.stdout + proc.stderr)
         self.assertIn("ok: 1 runs", proc.stdout)
 
     def test_every_expression_reaches_the_shell_through_env(self):
         script = _action_script()
         self.assertIsNone(re.search(r"\$\{\{", script), "no ${{ }} spliced into the run block")
+
+
+class WorkflowTest(unittest.TestCase):
+    """The required check runs trusted code: the workflow shape that makes that true."""
+
+    def test_the_required_job_runs_the_base_branchs_action_on_pr_data(self):
+        text = (ROOT / ".github/workflows/ledger.yml").read_text()
+        job = text.split("  ledger-verify:\n", 1)[1].split("\n  ledger-verify-self:", 1)[0]
+        self.assertIn("pull_request_target:", text)
+        self.assertIn("github.event.pull_request.base.sha", job, "the Action comes from the base branch")
+        self.assertIn("uses: ./trusted", job)
+        self.assertIn("refs/pull/{0}/merge", job, "the change is checked at GitHub's merge commit")
+        self.assertEqual(job.count("persist-credentials: false"), 2)
+        self.assertNotIn("secrets.", text)
+        self.assertIn("permissions:\n  contents: read", text)
 
 
 if __name__ == "__main__":
