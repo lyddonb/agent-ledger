@@ -152,6 +152,11 @@ class Redactor:
                 return name
         return None
 
+    def find(self, line: str) -> str | None:
+        """The name of a pattern that matches somewhere in `line`, in any decoded view, or None.
+        Placeholders don't count, so redacted text scans clean."""
+        return self._leftover_in_views(line)
+
     def redact(self, text: str) -> Redacted:
         """Redact `text`, or raise Unconfirmed if the result still matches a pattern."""
         result = self._redact_once(text)
