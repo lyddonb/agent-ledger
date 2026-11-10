@@ -157,6 +157,25 @@ How it works (M0 unit 3, `agent_ledger.redact`):
 
 This repo ships a GitHub Action, `ledger-verify`, that runs `ledger verify --base <target branch>` and a secret scan over `.audit/` on every PR. It fails when a chain breaks, a past line changed, or a secret appears. With branch protection that forbids force-pushes to `main`, the merged history is the project-level chain.
 
+Built in M0 unit 6. Add it to a project's workflow:
+
+```yaml
+on: [pull_request, push]
+permissions: {contents: read}
+jobs:
+  ledger-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}   # seals and --base need the full history
+      - uses: lyddonb/agent-ledger@<commit or tag>
+```
+
+- **Base.** On a pull request the base is `origin/<base branch>`, checked against the merge commit GitHub checks out, so a branch behind main is still compared with main's current lines. On a push it is the commit before the push, so pushes to `main` are append-only too. A push that creates a branch has no base: verify still checks every chain and seal, with a warning. Override with the `base` input.
+- **What runs.** `ledger verify --base` (chains, index, seals, append-only) and `ledger scan --base` (secrets in the `.audit` files the change touches). Both run, and either failing fails the job.
+- **`ledger scan`.** Every line of every file under `.audit` (session archives decompressed as a stream capped at 2 GB) is checked in each decoded view the redactor confirms with, using the built-in patterns and the project's `.agents/policy.yaml`. A finding names the file, line and pattern, never the text. A file that can't be read, is binary, exceeds the cap or is a symlink or submodule is a finding, since it can't be shown clean. Without `--base` it scans every file under `.audit` on disk.
+- **Untrusted pull requests.** The Action runs the CLI from its own pinned copy with `python -I`, so the repo under check can't put its own `agent_ledger` package or a `sitecustomize.py` in the way; pin it by commit or tag. Every workflow expression reaches the shell through `env`, and the job needs only `contents: read`. This repo checks itself with `uses: ./`, the Action from the same commit, which a pull request could edit; its separate test workflow and review cover that.
+
 ## Migration
 
 Existing `decisions.tsv` trails stay readable. `ledger import-tsv` converts one into a run, marked as imported, with chaining starting at import.
