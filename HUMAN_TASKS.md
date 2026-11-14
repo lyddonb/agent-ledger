@@ -10,7 +10,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | H4 | Approve the M0 charter | Done 2026-11-08 |
 | H5 | Pick the project for the M0 gate run | Needed by M0 unit 9 |
 | H6 | Allow only merge commits on `main` (turn off squash and rebase merging) | Done 2026-11-10: squash and rebase merging off, merge commits on |
-| H7 | Require the `ledger-verify` check on `main` | To do, after it first runs on a PR |
+| H7 | Require the `ledger-verify` check on `main` | Done 2026-11-14: required with the three test checks, strict |
 
 ### H1. Confirm the name
 Renaming is cheap until the repo is public and `uses: lyddonb/agent-ledger@v1` appears in other repos' CI. Rename the folder, `pyproject.toml`, the README and the specs if you want something else.
@@ -43,7 +43,7 @@ gh api -X PATCH repos/lyddonb/agent-ledger -f allow_squash_merge=false -f allow_
 ```
 Every project that keeps `.audit/` needs the same setting; unit 7's agentfiles status can check it later.
 
-### H7. Require the `ledger-verify` check
+### H7. Require the `ledger-verify` check — Done 2026-11-14
 Once the `ledger` workflow is on `main` and `ledger-verify` has run on a pull request (it runs from `pull_request_target`, so it first appears on the pull request after this one), add `ledger-verify` to `main`'s required status checks. Don't require `ledger-verify-self`: a pull request can edit it next to the three test checks, so a PR that breaks a chain, rewrites merged lines or adds a secret can't merge:
 
 ```bash
