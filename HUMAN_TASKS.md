@@ -5,7 +5,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | # | Task | Status |
 |---|---|---|
 | H1 | Confirm the name `agent-ledger` (CLI `ledger`) | To do |
-| H2 | Create the GitHub repo and push | Done (private for now; see below) |
+| H2 | Create the GitHub repo and push | Done; public since 2026-11-14 |
 | H3 | Turn on Actions and protect `main` (no force-push) | Done 2026-11-08: Actions on; main requires a PR and the three test checks, admins included, no force-push or deletion. |
 | H4 | Approve the M0 charter | Done 2026-11-08 |
 | H5 | Pick the project for the M0 gate run | Needed by M0 unit 9 |
@@ -16,7 +16,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 Renaming is cheap until the repo is public and `uses: lyddonb/agent-ledger@v1` appears in other repos' CI. Rename the folder, `pyproject.toml`, the README and the specs if you want something else.
 
 ### H2. Create the GitHub repo and push — Done
-The repo exists as `lyddonb/agent-ledger` but is **private**. The plan below says public; making it public is still your call.
+The repo is `lyddonb/agent-ledger`, public since 2026-11-14, when agentfiles started installing `ledger` from it.
 
 ```bash
 cd ~/code/agent-ledger

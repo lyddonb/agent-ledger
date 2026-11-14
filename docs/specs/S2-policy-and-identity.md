@@ -14,7 +14,7 @@ One policy file tells every agent which actions are gates, what budgets to use a
 | `.agents/policy.yaml` in a project | A person, by hand or with agentfiles | Yes | The team's rules for that project |
 | The charter's front matter | The agent, approved by a human | Yes | This run's additions |
 
-Stricter always wins. Gates and security rules are the union of all three, so a project or charter can add a gate but never remove one. A budget can be lowered at each level but not raised past the project's ceiling.
+Stricter always wins. Gates and the security rules that add protection (sandboxed tiers, redact patterns, audit sinks) are the union of all three, so a project or charter can add a gate but never remove one. `network_allow` is the opposite kind of rule, since allowing a host loosens the policy, so it is the intersection: a later level can narrow it, never widen it. A budget can be lowered at each level but not raised past the project's ceiling, and session archiving stays on once any level turns it on. agentfiles applies these rules across profiles and `local.yaml`, and `agentfiles policy check` applies them to a project's file (M0 unit 7).
 
 ## Schema
 
@@ -87,8 +87,8 @@ Every ledger entry carries an `actor`:
 
 ## Acceptance criteria
 
-- [ ] `agentfiles sync builder` writes a valid `~/.agents/policy.yaml` with the default gates.
-- [ ] A project policy that omits a user gate still enforces it; a test proves the union.
+- [x] `agentfiles sync builder` writes a valid `~/.agents/policy.yaml` with the default gates (agentfiles `tests/test_policy.py`, M0 unit 7).
+- [x] A project policy that omits a user gate still enforces it; a test proves the union (agentfiles `policy check`, `tests/test_policy.py`).
 - [ ] A charter budget above the project ceiling fails `ledger charter check`.
 - [ ] Every ledger entry from a test run has an actor with `on_behalf_of` set.
 - [ ] A scheduled test run's entries name the schedule's creator.
