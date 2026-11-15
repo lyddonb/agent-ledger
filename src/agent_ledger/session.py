@@ -96,8 +96,8 @@ def add_session(
 
     If redaction can't be confirmed, nothing is written to the sessions folder; the entry records
     where the raw transcript is instead, and `archived` is False. That covers the transcript, the
-    archive path and the archived entry itself: when the redactor refuses the entry (its
-    redaction counts can read as a `password=...` assignment), the pointer entry is written instead.
+    archive path and the archived entry itself: when the redactor refuses the entry, the pointer
+    entry is written instead.
     """
     if session_id is None:
         session_id = transcript.stem  # x.one.jsonl and x.two.jsonl stay apart
@@ -151,8 +151,10 @@ def add_session(
     body = redacted.text.encode("utf-8")
     archive = _compress(body)
     staged = _stage(_sessions_dir(sink, run_id), name, archive)
+    # Pairs, not a name -> count object: "url_password":16} reads to the redactor as a password
+    # assignment, so the entry would be refused.
     data = {**base, "archived": True, "path": rel.as_posix(), "redacted_sha256": _sha256(body),
-            "redactions": dict(sorted(redacted.counts.items()))}
+            "redactions": [[name, n] for name, n in sorted(redacted.counts.items())]}
     total = sum(redacted.counts.values())
     if len(archive) > LFS_OVER_BYTES:
         warnings.append(f"{rel} is {len(archive) // (1024 * 1024)} MB compressed, over the 20 MB "

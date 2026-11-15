@@ -8,13 +8,14 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from helpers import T0  # noqa: F401  (puts src on the path)
 from test_cli import run_cli
 
 from agent_ledger.entry import AgentActor, EntryType, HumanActor
 from agent_ledger.redact import Redactor
-from agent_ledger.run import append, init_run, repo_sink
+from agent_ledger.run import RedactionRefused, append, init_run, repo_sink
 from agent_ledger.session import add_session
 from agent_ledger.sink import LedgerError
 from agent_ledger.verify import Verified, verify_run
@@ -28,6 +29,15 @@ def transcript_lines(*extra):
     return [json.dumps({"type": "user", "message": {"content": "start unit 3"}}),
             json.dumps({"type": "assistant", "message": {"content": "reading the spec"}}),
             *extra]
+
+
+def refusing_archived_entries():
+    """Make append refuse the archived entry as the redactor would, and pass everything else."""
+    def fake(*args, **kw):
+        if kw["data"].get("archived") is True:
+            raise RedactionRefused("line 1: a secret_assignment match survived in a decoded view of the text")
+        return append(*args, **kw)
+    return mock.patch("agent_ledger.session.append", fake)
 
 
 class SessionAddTest(unittest.TestCase):
@@ -56,7 +66,7 @@ class SessionAddTest(unittest.TestCase):
             if f.is_file():
                 data = gzip.decompress(f.read_bytes()) if f.suffix == ".gz" else f.read_bytes()
                 self.assertNotIn(b"Z" * 40, data, f"secret found in {f}")
-        self.assertEqual(result.entry.data["redactions"], {"anthropic_key": 1})
+        self.assertEqual(result.entry.data["redactions"], (("anthropic_key", 1),))
 
     def test_the_entry_holds_both_hashes_and_they_check_out(self):
         path = self.transcript(transcript_lines(json.dumps({"x": f"token: {FAKE_KEY}"})))
@@ -179,13 +189,22 @@ class SessionAddTest(unittest.TestCase):
         self.assertFalse((self.sink.run_dir(RUN) / "sessions").exists())
         self.assertNotIn("k" * 30, (self.sink.run_dir(RUN) / "ledger.jsonl").read_text())
 
+    def test_many_redactions_under_a_password_or_key_name_still_archive(self):
+        # As a name -> count object, "url_password":12 read as a password= assignment and the
+        # archived entry was refused (seen on a real run); pairs keep the counts readable.
+        path = self.transcript(transcript_lines(
+            *(json.dumps({"tool_result": f"psql postgres://app:pw{i}x@db/main"}) for i in range(12))))
+        result = self.add(path)
+        self.assertTrue(result.archived, result.entry.data.get("reason"))
+        self.assertEqual(result.entry.data["redactions"], (("url_password", 12),))
+        self.assertTrue((self.root / result.entry.data["path"]).is_file())
+
     def test_an_archived_entry_the_redactor_refuses_still_records_where_the_transcript_is(self):
-        # Twelve URL passwords make the entry's own data end in "url_password":12}}, which reads
-        # as a password= assignment, so the archived entry can't be confirmed (seen on a real run).
         path = self.transcript(transcript_lines(
             *(json.dumps({"tool_result": f"psql postgres://app:pw{i}x@db/main"}) for i in range(12))))
         before = len(self.sink.read(RUN).entries)
-        result = self.add(path)
+        with refusing_archived_entries():
+            result = self.add(path)
         self.assertFalse(result.archived)
         self.assertEqual(len(self.sink.read(RUN).entries), before + 1, "no pointer entry was written")
         d = result.entry.data
@@ -316,8 +335,8 @@ class SessionCliTest(unittest.TestCase):
         self.assertIn("stays out of git", err)
 
     def test_a_refused_archived_entry_exits_1_with_its_pointer_recorded(self):
-        lines = [json.dumps({"t": f"postgres://app:pw{i}x@db/main"}) for i in range(12)]
-        code, _, err = self.session_add(self.file(*lines))
+        with refusing_archived_entries():
+            code, _, err = self.session_add(self.file(json.dumps({"t": "hi"})))
         self.assertEqual(code, 1, err)
         self.assertIn("recorded its location", err)
         last = json.loads((self.root / ".audit/runs" / RUN / "ledger.jsonl").read_text().splitlines()[-1])
