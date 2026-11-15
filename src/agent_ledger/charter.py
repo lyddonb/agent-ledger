@@ -665,13 +665,15 @@ MIN_SHA_PREFIX = 12
 
 
 def approve_charter(sink: RepoSink, run_id: str, *, actor: HumanActor, sha256: str, why: str,
-                    quote: str | None, channel: str | None, relayed_by: str | None, append) -> Approved:
+                    quote: str | None, channel: str | None, relayed_by: str | None, append,
+                    typed_by_me: bool = False) -> Approved:
     """Record a human's approval of the charter, bound to the version the human read.
 
     `sha256` is the hash (at least its first 12 hex characters) that `ledger charter check`
     printed for the version the human reviewed; it must match the file now, so an edit between
     review and approval is refused. When an agent relays the approval, the human's quoted words
-    must contain that prefix, so the archived session shows which version was approved. The
+    must contain that prefix, so the archived session shows which version was approved. A human
+    approving in their own terminal passes `typed_by_me` instead (S3 "Who typed a human's entry"). The
     charter must pass check, and the run's ledger must exist. Approving the same charter twice
     is a no-op."""
     path = sink.run_dir(run_id) / CHARTER_FILE
@@ -698,6 +700,8 @@ def approve_charter(sink: RepoSink, run_id: str, *, actor: HumanActor, sha256: s
     for k, v in (("quote", quote), ("channel", channel), ("relayed_by", relayed_by)):
         if v:
             data[k] = v
+    if typed_by_me:
+        data["self_typed"] = True
     if status.approval_seq is not None:
         data["supersedes"] = status.approval_seq
     entry = append(sink, run_id, actor=actor, type=EntryType.APPROVAL,

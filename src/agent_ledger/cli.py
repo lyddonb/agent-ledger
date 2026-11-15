@@ -220,6 +220,9 @@ def _add_append_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--evidence", action="append", default=[],
                    help="a pointer (commit, PR, path:line, hash); repeat for more")
     p.add_argument("--data", type=_data, default=None, help="type-specific fields as a JSON object")
+    p.add_argument("--typed-by-me", action="store_true",
+                   help="for a human's approval or gate-answer typed by that human: records data.self_typed. "
+                        "An agent relaying one sets data.relayed_by and data.quote instead")
     _add_redact_arg(p)
     _add_root_arg(p)
 
@@ -227,7 +230,8 @@ def _add_append_args(p: argparse.ArgumentParser) -> None:
 def _append(ns: argparse.Namespace) -> int:
     def body() -> int:
         entry = append(_sink(ns), ns.run, actor=ns.actor, type=EntryType(ns.type),
-                       summary=ns.summary, why=ns.why, evidence=ns.evidence, data=ns.data,
+                       summary=ns.summary, why=ns.why, evidence=ns.evidence,
+                       data={**(ns.data or {}), **({"self_typed": True} if ns.typed_by_me else {})},
                        redactor=_redactor(ns))
         print(f"appended {entry.run_id} seq {entry.seq} {entry.hash}")
         return EXIT_OK
@@ -382,7 +386,10 @@ def _add_charter_args(p: argparse.ArgumentParser) -> None:
                    help="one line: how and why it was approved")
     a.add_argument("--quote", default=None, help="the approver's words, verbatim")
     a.add_argument("--channel", default=None, help="where the approval was given, such as 'claude-code chat'")
-    a.add_argument("--relayed-by", default=None, help="the agent id that typed this approval in, if any")
+    a.add_argument("--relayed-by", default=None,
+                   help="the agent id that typed this approval in; needs --quote with the hash prefix")
+    a.add_argument("--typed-by-me", action="store_true",
+                   help="the approving human typed this command themselves; records data.self_typed")
     _add_redact_arg(a)
     _add_root_arg(a)
     r = sub.add_parser("render", help="read the charter aloud or as video (M2, not built)")
@@ -408,7 +415,7 @@ def _charter(ns: argparse.Namespace) -> int:
         charter = read_charter(path)
         if ns.charter_command == "approve":
             r = approve_charter(sink, ns.run_id, actor=ns.actor, sha256=ns.sha256, why=ns.why, quote=ns.quote,
-                                channel=ns.channel, relayed_by=ns.relayed_by,
+                                channel=ns.channel, relayed_by=ns.relayed_by, typed_by_me=ns.typed_by_me,
                                 append=lambda *a, **k: append(*a, redactor=_redactor(ns), **k))
             if r.new:
                 print(f"approved {ns.run_id}: charter sha256 {r.entry.data['charter_sha256'][:16]} at seq {r.entry.seq}")

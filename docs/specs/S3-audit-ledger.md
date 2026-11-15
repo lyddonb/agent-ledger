@@ -59,6 +59,20 @@ Format v1 has no floating-point numbers, so dollars are integer millionths: `usd
 
 Each is a non-negative integer except `estimate`, a boolean. Other keys are allowed. `ledger append` refuses a `spend` entry that breaks these rules; `verify` doesn't check them, because they are a convention inside `data`, not part of format v1. Decided by Beau on 2026-11-09 (the M0 run's ledger records it as a `gate-answer`).
 
+### Who typed a human's entry
+
+An `approval` or `gate-answer` names a human actor, but the human often doesn't type it: an agent relays their words from a chat. `ledger append` (and so `ledger charter approve`) refuses a human-actor `approval` or `gate-answer` unless its `data` says who typed it, in one of three ways:
+
+| Who typed it | `data` | CLI |
+|---|---|---|
+| An agent, relaying the human | `relayed_by` (the agent's id) and `quote` (the human's words, verbatim), both non-empty | `--data '{"relayed_by": ..., "quote": ...}'`; `--relayed-by` and `--quote` on `charter approve` |
+| The human, in their own terminal | `self_typed: true` | `--typed-by-me` |
+| An importer, copying an older record | `imported` (see Migration), whose `by` names the importer | `--data '{"imported": ...}'` |
+
+`self_typed` with `relayed_by` is refused, as is `self_typed` set to anything but `true`. A `quote` alone, without `relayed_by` or `self_typed`, doesn't say who typed it, so it is refused. Agent-actor entries need no marker. Like spend entries, this is a convention inside `data` checked at write time; `verify` doesn't check it, so entries written before the rule still verify.
+
+The actor isn't authenticated (see "The ledger CLI"), so an agent can still pass `--typed-by-me`. The rule makes that a stated claim in the entry, which PR review and the session archive can check, rather than a silent default.
+
 ### Format v1: canonical form
 
 This section is normative. A verifier in any language must agree with it byte for byte; `tests/vectors/` holds golden vectors and a golden ledger.
@@ -131,7 +145,7 @@ Parallel subagents append through the orchestrating agent, or take a file lock, 
 
 The writer refuses a symlink at `.audit`, `.audit/runs` or the run folder, as verify refuses one at `ledger.jsonl`. `ledger verify RUN_FOLDER` still follows a symlinked run folder (M0 unit 1's choice); `ledger verify` over the repo, which the `ledger-verify` Action (unit 6) runs, refuses any symlink in `.audit`. Outside a git repo, `--root` is required.
 
-The CLI does not authenticate `--actor`: anyone who can run `ledger append` can write an entry naming any actor, including a human approval. In M0 the protection is review of the PR that adds the line; signing is not in M0. `ledger show` prints each actor as `kind:id` with non-ASCII escaped, and escapes invisible and combining characters in the text, so one actor can't pass for another on screen.
+The CLI does not authenticate `--actor`: anyone who can run `ledger append` can write an entry naming any actor, including a human approval, though a human's approval or gate answer must say who typed it (see "Who typed a human's entry"). In M0 the protection is review of the PR that adds the line; signing is not in M0. `ledger show` prints each actor as `kind:id` with non-ASCII escaped, and escapes invisible and combining characters in the text, so one actor can't pass for another on screen.
 
 ## Sinks
 

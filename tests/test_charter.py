@@ -344,6 +344,7 @@ class ApprovalTest(unittest.TestCase):
 
     def approve(self, **kw):
         kw.setdefault("sha256", read_charter(self.path).sha256)
+        kw.setdefault("typed_by_me", True)
         return approve_charter(self.sink, RUN, actor=HUMAN, why="reviewed", quote="Approved",
                                channel="claude-code chat", relayed_by=None, append=append, **kw)
 
@@ -386,10 +387,10 @@ class ApprovalTest(unittest.TestCase):
         init_run(self.sink, RUN, actor=AGENT, why="test")
         sha = read_charter(self.path).sha256
         append(self.sink, RUN, actor=HUMAN, type=EntryType.APPROVAL, summary="Approved", why="w",
-               evidence=[f"see old note: charter.md sha256 {sha}"])
+               evidence=[f"see old note: charter.md sha256 {sha}"], data={"self_typed": True})
         self.assertEqual(self.status().state, "draft", "the legacy form must be the whole pointer")
         append(self.sink, RUN, actor=HUMAN, type=EntryType.APPROVAL, summary="Approved", why="w",
-               evidence=[f"charter.md sha256 {sha}, as committed in abc1234"])
+               evidence=[f"charter.md sha256 {sha}, as committed in abc1234"], data={"self_typed": True})
         self.assertEqual(self.status().state, "approved")
 
     def test_editing_then_reverting_is_approved_again(self):
@@ -416,7 +417,7 @@ class ApprovalTest(unittest.TestCase):
         init_run(self.sink, RUN, actor=AGENT, why="test")
         sha = read_charter(self.path).sha256
         append(self.sink, RUN, actor=HUMAN, type=EntryType.APPROVAL, summary="x", why="w",
-               evidence=[f"charter.md sha256 {sha}, rejected"])
+               evidence=[f"charter.md sha256 {sha}, rejected"], data={"self_typed": True})
         self.assertEqual(self.status().state, "draft")
 
     def test_a_symlinked_charter_is_refused(self):
@@ -469,6 +470,25 @@ class CharterCliTest(unittest.TestCase):
         code, out, _ = self.cli("charter", "check", RUN, "--require-approved")
         self.assertEqual(code, 1)
         self.assertIn("edited since the approval at seq 2", out)
+
+    def test_approve_must_say_who_typed_it(self):
+        self.assertEqual(self.cli("init", "export-retries", "--date", "2026-11-10", "--actor", self.agent)[0], 0)
+        (self.root / ".audit/runs" / RUN / "charter.md").write_text(charter_text())
+        ledger = self.root / ".audit/runs" / RUN / "ledger.jsonl"
+        sha = read_charter(self.root / ".audit/runs" / RUN / "charter.md").sha256[:12]
+        approve = ("charter", "approve", RUN, "--actor", self.human, "--sha256", sha)
+        before = ledger.read_bytes()
+        code, _, err = self.cli(*approve)
+        self.assertEqual(code, 2, "an agent typing the human's approval without --relayed-by must be refused")
+        self.assertIn("must say who typed it", err)
+        code, _, err = self.cli(*approve, "--typed-by-me", "--relayed-by", "claude@claude-code#70d5",
+                                "--quote", f"Approved {sha}")
+        self.assertEqual(code, 2, "self-typed and relayed contradict each other")
+        self.assertEqual(ledger.read_bytes(), before, "a refused approval writes nothing")
+        code, out, err = self.cli(*approve, "--typed-by-me")
+        self.assertEqual(code, 0, err)
+        entry = json.loads(ledger.read_text().splitlines()[-1])
+        self.assertEqual((entry["type"], entry["actor"]["kind"], entry["data"]["self_typed"]), ("approval", "human", True))
 
     def test_render_is_an_honest_stub(self):
         code, _, err = run_cli("charter", "render", RUN)

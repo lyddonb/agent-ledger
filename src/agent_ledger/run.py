@@ -10,13 +10,16 @@ from typing import Any, Callable, Mapping, Sequence
 from . import _git
 from .index import COMMIT_RE, INDEX_FILE
 from .redact import Redactor, Unconfirmed
-from .entry import TS_FORMAT, TS_RE, Actor, ChainHead, Entry, EntryError, EntryType, next_entry
+from .entry import (HUMAN_ONLY_TYPES, TS_FORMAT, TS_RE, Actor, ChainHead, Entry, EntryError, EntryType,
+                    HumanActor, next_entry)
 from .sink import LedgerError, RepoSink, StaleHead
 
 AUDIT_DIR = ".audit"
 RUNS_DIR = "runs"
 # Entries copied in from a hand-written record carry data["imported"] (S3 "Migration").
 IMPORTED_KEY = "imported"
+# S3 "Who typed a human's entry": a human approval or gate answer says who typed it in.
+RELAYED_BY_KEY, QUOTE_KEY, SELF_TYPED_KEY = "relayed_by", "quote", "self_typed"
 # Each failed attempt means another writer appended, so this only runs out under a flood.
 APPEND_ATTEMPTS = 100
 
@@ -55,6 +58,33 @@ def check_imported(data: Mapping[str, Any] | None) -> None:
         format_ok = False
     if not format_ok:
         raise EntryError("schema", "data.imported.source_ts must be a real ts, like 2026-11-08T19:51:55Z")
+
+
+def check_typed_by(actor: Actor, entry_type: EntryType, data: Mapping[str, Any] | None) -> None:
+    """S3 "Who typed a human's entry": an approval or gate answer naming a human must say who
+    typed it. Relayed by an agent: data.relayed_by and data.quote, both non-empty text. Typed
+    by the human: data.self_typed is true. Copied from an older record: data.imported, whose
+    `by` names the importer. Without one of these, an agent's entry would pass for the human's."""
+    if entry_type not in HUMAN_ONLY_TYPES or not isinstance(actor, HumanActor):
+        return
+    data = data or {}
+    relayed = RELAYED_BY_KEY in data
+    self_typed = SELF_TYPED_KEY in data
+    if self_typed and data[SELF_TYPED_KEY] is not True:
+        raise EntryError("schema", "data.self_typed must be true when present")
+    if self_typed and RELAYED_BY_KEY in data:
+        raise EntryError("schema", "an entry can't be both typed by the human (self_typed) and relayed (relayed_by)")
+    if relayed:
+        for key in (RELAYED_BY_KEY, QUOTE_KEY):
+            if not isinstance(data.get(key), str) or not data[key].strip():
+                raise EntryError("schema", f"a relayed {entry_type.value} needs data.relayed_by (the agent that typed "
+                                           f"it) and data.quote (the human's words, verbatim), both non-empty")
+        return
+    if self_typed or IMPORTED_KEY in data:
+        return
+    raise EntryError("schema", f"a human's {entry_type.value} must say who typed it: an agent relaying it records "
+                               f"data.relayed_by and data.quote (--relayed-by and --quote on `charter approve`); "
+                               f"a human typing their own passes --typed-by-me")
 
 
 SPEND_COUNTS = ("usd_micros", "tokens", "cache_read_tokens", "wall_s")
@@ -127,6 +157,7 @@ def append(
     summary, why, evidence, data = fields["summary"], fields["why"], fields["evidence"], fields["data"]
     check_imported(data)
     check_spend(type, data)
+    check_typed_by(actor, type, data)
     if type is EntryType.SEAL and not _sealing:
         raise LedgerError("a seal entry is written by `ledger seal`, which also indexes it")
     for _ in range(APPEND_ATTEMPTS):
