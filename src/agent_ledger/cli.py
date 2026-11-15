@@ -318,7 +318,7 @@ def _session(ns: argparse.Namespace) -> int:
                   f"{r.entry.seq} (the transcript stays out of git)", file=sys.stderr)
             return EXIT_FAILED
         if r.new:
-            counts = ", ".join(f"{k} {v}" for k, v in d["redactions"].items()) or "none"
+            counts = ", ".join(f"{k} {v}" for k, v in d["redactions"]) or "none"
             print(f"archived {d['session_id']}: {d['path']} (redactions: {counts}); "
                   f"seq {r.entry.seq} {r.entry.hash}")
         return EXIT_OK
