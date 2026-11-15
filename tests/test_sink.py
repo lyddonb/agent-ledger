@@ -69,7 +69,7 @@ class RepoSinkTest(unittest.TestCase):
         a = append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="a", why="w",
                    evidence=["x.py:1"], data={"n": 1}, clock=clock)
         b = append(self.sink, RUN_ID, actor=HumanActor("lyddonb", "lyddonb@github"),
-                   type=EntryType.GATE_ANSWER, summary="b", why="w", clock=clock)
+                   type=EntryType.GATE_ANSWER, summary="b", why="w", data={"self_typed": True}, clock=clock)
         self.assertEqual((a.seq, b.seq, b.prev), (2, 3, a.hash))
         report = verify_run(self.sink.run_dir(RUN_ID))
         self.assertIsInstance(report, Verified)

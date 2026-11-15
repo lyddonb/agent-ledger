@@ -146,7 +146,7 @@ class WriteCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn(f"appended {DEMO} seq 2", out)
         code, out, err = run_cli("append", "--run", DEMO, "--actor", HUMAN, "--root", self.root,
-                                 "--type", "gate-answer", "--summary", "Yes", "--why", "Reviewed")
+                                 "--type", "gate-answer", "--summary", "Yes", "--why", "Reviewed", "--typed-by-me")
         self.assertEqual(code, 0, err)
 
         code, out, _ = run_cli("verify", self.run_dir)
@@ -187,24 +187,62 @@ class WriteCommandsTest(unittest.TestCase):
         _, out, _ = run_cli("show", DEMO, "--root", self.root)
         self.assertIn("[imported] Old call", out)
 
+    def test_a_human_entry_must_say_who_typed_it(self):
+        self.init()
+        human = ("--run", DEMO, "--root", self.root, "--actor", HUMAN, "--summary", "Go", "--why", "w")
+        ledger = self.run_dir / "ledger.jsonl"
+        refused = {
+            "unmarked approval": ("--type", "approval"),
+            "unmarked gate-answer": ("--type", "gate-answer"),
+            "quote without relayed_by": ("--type", "approval", "--data", '{"quote": "Go"}'),
+            "relayed_by without quote": ("--type", "approval", "--data", '{"relayed_by": "claude@claude-code#a0f4"}'),
+            "empty quote": ("--type", "approval", "--data", '{"relayed_by": "claude@claude-code#a0f4", "quote": " "}'),
+            "self_typed not true": ("--type", "approval", "--data", '{"self_typed": false}'),
+            "both self-typed and relayed": ("--type", "gate-answer", "--typed-by-me", "--data",
+                                            '{"relayed_by": "claude@claude-code#a0f4", "quote": "Go"}'),
+        }
+        for name, args in refused.items():
+            with self.subTest(name):
+                before = ledger.read_bytes()
+                code, _, err = run_cli("append", *human, *args)
+                self.assertEqual(code, 2, f"{name} must be refused")
+                self.assertIn("ledger append:", err)
+                self.assertEqual(ledger.read_bytes(), before, f"{name} must write nothing")
+        accepted = {
+            "typed by the human": (("--type", "approval", "--typed-by-me"), {"self_typed": True}),
+            "relayed with the human's words": (
+                ("--type", "gate-answer", "--data", '{"relayed_by": "claude@claude-code#a0f4", "quote": "Go"}'),
+                {"relayed_by": "claude@claude-code#a0f4", "quote": "Go"}),
+            "imported": (("--type", "approval", "--data", '{"imported": {"source": "notes.md#1", '
+                          '"source_ts": "2026-11-09T02:51:37Z", "by": "claude@claude-code#a0f4"}}'), None),
+        }
+        for name, (args, data) in accepted.items():
+            with self.subTest(name):
+                code, _, err = run_cli("append", *human, *args)
+                self.assertEqual(code, 0, err)
+                if data is not None:
+                    self.assertEqual(json.loads(ledger.read_text().splitlines()[-1])["data"], data)
+        code, _, err = self.append("--type", "decision", "--summary", "s", "--why", "w")
+        self.assertEqual(code, 0, f"agent entries need no marker: {err}")
+
     def test_show_labels_the_actor_kind_and_escapes_invisible_characters(self):
         self.init()
         code, _, err = run_cli("append", "--run", DEMO, "--root", self.root, "--type", "approval",
                                "--actor", '{"kind": "human", "id": "lyddonb\u200b", "on_behalf_of": "x@github"}',
-                               "--summary", "Approved \u202edetrats", "--why", "w")
+                               "--summary", "Approved \u202edetrats", "--why", "w", "--typed-by-me")
         self.assertEqual(code, 0, err)
         _, out, _ = run_cli("show", DEMO, "--root", self.root)
         self.assertIn("agent:claude@claude-code#a0f4", out)
         self.assertIn("human:lyddonb\\u200b", out)
         code, _, err = run_cli("append", "--run", DEMO, "--root", self.root, "--type", "approval",
                                "--actor", '{"kind": "human", "id": "lyddonb\u3164", "on_behalf_of": "x@github"}',
-                               "--summary", "Filler\ufe0e", "--why", "w")
+                               "--summary", "Filler\ufe0e", "--why", "w", "--typed-by-me")
         self.assertEqual(code, 0, err)
         _, out, _ = run_cli("show", DEMO, "--root", self.root)
         self.assertIn("human:lyddonb\\u3164", out)
         code, _, err = run_cli("append", "--run", DEMO, "--root", self.root, "--type", "approval",
                                "--actor", '{"kind": "human", "id": "lydd\\u043enb", "on_behalf_of": "x@github"}',
-                               "--summary", "Cyrillic o", "--why", "w")
+                               "--summary", "Cyrillic o", "--why", "w", "--typed-by-me")
         self.assertEqual(code, 0, err)
         _, out, _ = run_cli("show", DEMO, "--root", self.root)
         self.assertIn("human:lydd\\u043enb", out, "a look-alike login must not print as lyddonb")
