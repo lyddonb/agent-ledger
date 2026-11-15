@@ -107,18 +107,26 @@ def check_spend(entry_type: EntryType, data: Mapping[str, Any] | None) -> None:
 
 
 
+class RedactionRefused(LedgerError):
+    """An entry's own text couldn't be confirmed clean after redaction, so it wasn't written."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"refusing: {detail}")
+        self.detail = detail
+
+
 def run_id_for(slug: str, day: date) -> str:
     return f"{day.isoformat()}-{slug}"
 
 
 def redact_fields(redactor: Redactor, fields: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
     """Redact the free-text fields of an entry (summary, why, evidence, data) before chaining.
-    Raises LedgerError when redaction can't be confirmed, so nothing unconfirmed is written."""
+    Raises RedactionRefused when redaction can't be confirmed, so nothing unconfirmed is written."""
     try:
         clean, counts = redactor.redact_value(dict(fields))
         redactor.confirm(json.dumps(clean, ensure_ascii=False))
     except Unconfirmed as e:
-        raise LedgerError(f"refusing: {e}") from None
+        raise RedactionRefused(str(e)) from None
     return clean, counts
 
 
