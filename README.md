@@ -4,7 +4,7 @@ A tamper-evident record of what AI agents did in your repo, and why.
 
 agent-ledger is the runtime behind **governed agent runs**. Before a large run starts, a person approves its charter (goal, gates, budget). As the run proceeds, agents write a hash-chained ledger of their decisions, gate answers, verification results and spend. Session transcripts are archived beside it, redacted. CI verifies every chain on every PR, so an auditor can reconstruct how any merged change was approved, built, tested and reviewed, without trusting the agent that wrote it.
 
-> **Status: M0 in progress.** `ledger init`, `ledger append` and `ledger show` write and read a run's chain, and `ledger verify` checks every run, the index and the seals (`--base origin/main` adds the append-only check against main). Every write is redacted, `ledger session add` archives redacted transcripts, `ledger seal` closes a run and indexes it, and `ledger charter new|check|approve` write, check and approve a run's charter. `ledger scan` looks for secrets in `.audit`, and the `ledger-verify` Action (`action.yml`) runs verify and scan on every PR. The entry format is unfrozen until v1 is tagged. See [the roadmap](ROADMAP.md) and the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md).
+> **Status: M0 in progress.** `ledger init`, `ledger append` and `ledger show` write and read a run's chain, and `ledger verify` checks every run, the index and the seals (`--base origin/main` adds the append-only check against main). Every write is redacted, `ledger session add` archives redacted transcripts, `ledger seal` closes a run and indexes it, `ledger spend` checks recorded spend against the charter budget, and `ledger charter new|check|approve` write, check and approve a run's charter. `ledger scan` looks for secrets in `.audit`, and the `ledger-verify` Action (`action.yml`) runs verify and scan on every PR. The entry format is unfrozen until v1 is tagged. See [the roadmap](ROADMAP.md) and the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md).
 
 ## How it fits with agent-kit and agentfiles
 
@@ -28,6 +28,7 @@ ledger session add <transcript>    redact, compress, archive, hash into the chai
 ledger verify [--base origin/main] chains intact, ledgers only grew, seals point at real commits
 ledger show <run-id>               readable table of a run
 ledger seal <run-id>               close the chain and anchor it in .audit/INDEX.jsonl
+ledger spend <run-id>              spend entries added up against the charter budget; exit 1 at a limit
 ```
 
 In a project, the records live under `.audit/`:

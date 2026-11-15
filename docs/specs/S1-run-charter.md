@@ -79,7 +79,7 @@ A run moves through fixed states, and every move is a ledger entry (S3):
 - Three limits, all required for tier 2 and 3: dollars, tokens, wall-clock time. Plus a cap on parallel agents.
 - Dollars are the main measure, since they weight each kind of token by its price. Tokens count input, output and cache writes, but not cache reads. An agent re-reads its cached context on every turn, so counting cache reads would trip the token limit on any long run while adding little cost. The ledger reports cache reads separately (S3 "Spend entries").
 - The estimate lists planned calls (executions, reviews, panels). At close, the ledger CLI compares the plan with recorded calls and flags any difference, as Harness² does with its budget identity.
-- Reaching any limit is the `spend` gate. A stop-loss applies too: if the predicate hasn't moved in N units and half the budget is spent, stop and write up.
+- Reaching any limit is the `spend` gate. `ledger spend <run-id>` adds up the run's spend entries against `budget.usd` and `budget.tokens` and exits non-zero at either limit (S3 "Spend entries"), so check it each time a unit's spend is recorded. A stop-loss applies too: if the predicate hasn't moved in N units and half the budget is spent, stop and write up.
 - Where a tool reports no spend, the budget is advisory and the charter says so.
 
 ## Rendering (M2)
