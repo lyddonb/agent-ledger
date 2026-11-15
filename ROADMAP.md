@@ -4,7 +4,7 @@ The full plan, with all milestones and the reasoning, is in the "Governed agent 
 
 | Milestone | This repo's part | Starts when |
 |---|---|---|
-| **M0. Foundation** | The `ledger` CLI (init, append, verify, show, seal, session add, charter, import-tsv), the repo sink and sink interface, redaction and the session archive, actor identity, the `ledger-verify` Action | You approve the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md) |
+| **M0. Foundation** (done: v1.0.0, 2026-11-15) | The `ledger` CLI (init, append, verify, show, seal, spend, session add, charter, import-tsv, scan), the repo sink and sink interface, redaction and the session archive, actor identity, the `ledger-verify` Action | You approve the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md) |
 | M1. Quality and security | Charter fields for the spec ladder and security lens; review entries | M0's gate passes |
 | M2. Enforcement | `ledger charter render --audio/--video`; spend calibration from recorded runs | M1's gate passes |
 | M3. Harness lab | A second package, `harness-lab`: test agent-setup changes on a project's own tasks (spec S6 in the plan doc) | One app has a verification skill |
