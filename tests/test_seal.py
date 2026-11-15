@@ -486,6 +486,24 @@ class SealCliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("nothing to do", out)
 
+    def seal_after(self, *types):
+        for t in types:
+            append(self.repo.sink, RUN_A, actor=AGENT, type=t, summary=f"a {t.value}", why="w",
+                   data={"usd_micros": 1} if t is EntryType.SPEND else {})
+        self.repo.commit()
+        return run_cli("seal", RUN_A, "--actor", self.actor, "--root", self.repo.root)
+
+    def test_seal_warns_when_no_spend_follows_the_last_verification(self):
+        code, out, err = self.seal_after(EntryType.SPEND, EntryType.VERIFICATION, EntryType.DECISION)
+        self.assertEqual(code, 0, err)
+        self.assertIn("sealed", out)
+        self.assertIn("no spend entry after the last verification (seq 5)", err)
+
+    def test_seal_is_quiet_when_spend_follows_the_last_verification(self):
+        code, _, err = self.seal_after(EntryType.VERIFICATION, EntryType.SPEND, EntryType.LESSON)
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("spend", err)
+
     def test_uncommitted_ledger_is_exit_2_with_the_reason(self):
         self.repo.commit()
         append(self.repo.sink, RUN_A, actor=AGENT, type=EntryType.DECISION, summary="late", why="w")

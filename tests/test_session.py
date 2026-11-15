@@ -179,6 +179,24 @@ class SessionAddTest(unittest.TestCase):
         self.assertFalse((self.sink.run_dir(RUN) / "sessions").exists())
         self.assertNotIn("k" * 30, (self.sink.run_dir(RUN) / "ledger.jsonl").read_text())
 
+    def test_an_archived_entry_the_redactor_refuses_still_records_where_the_transcript_is(self):
+        # Twelve URL passwords make the entry's own data end in "url_password":12}}, which reads
+        # as a password= assignment, so the archived entry can't be confirmed (seen on a real run).
+        path = self.transcript(transcript_lines(
+            *(json.dumps({"tool_result": f"psql postgres://app:pw{i}x@db/main"}) for i in range(12))))
+        before = len(self.sink.read(RUN).entries)
+        result = self.add(path)
+        self.assertFalse(result.archived)
+        self.assertEqual(len(self.sink.read(RUN).entries), before + 1, "no pointer entry was written")
+        d = result.entry.data
+        self.assertEqual(d["location"], str(path.resolve()))
+        self.assertEqual(d["raw_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+        self.assertEqual(d["raw_bytes"], path.stat().st_size)
+        self.assertIn("archived entry failed redaction", d["reason"])
+        self.assertNotIn("path", d)
+        self.assertEqual(list((self.sink.run_dir(RUN) / "sessions").iterdir()), [], "an archive was kept")
+        self.assertNotIn("pw3x", (self.sink.run_dir(RUN) / "ledger.jsonl").read_text())
+
     def test_a_transcript_that_is_not_utf8_is_not_archived(self):
         path = self.src / "bin.jsonl"
         path.write_bytes(b'{"a": "\xff\xfe"}\n')
@@ -296,6 +314,14 @@ class SessionCliTest(unittest.TestCase):
         code, _, err = self.session_add(self.file('{"torn": "\\u0073' + key[1:]))
         self.assertEqual(code, 1)
         self.assertIn("stays out of git", err)
+
+    def test_a_refused_archived_entry_exits_1_with_its_pointer_recorded(self):
+        lines = [json.dumps({"t": f"postgres://app:pw{i}x@db/main"}) for i in range(12)]
+        code, _, err = self.session_add(self.file(*lines))
+        self.assertEqual(code, 1, err)
+        self.assertIn("recorded its location", err)
+        last = json.loads((self.root / ".audit/runs" / RUN / "ledger.jsonl").read_text().splitlines()[-1])
+        self.assertEqual((last["type"], last["data"]["archived"]), ("session", False))
 
     def test_append_cli_redacts(self):
         code, _, err = run_cli("append", "--run", RUN, "--actor", self.actor, "--type", "decision",

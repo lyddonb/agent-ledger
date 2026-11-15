@@ -25,6 +25,7 @@ from ._git import GitError
 from .repo_verify import verify_repo
 from .scan import scan_repo
 from .session import add_session
+from .spend import limits, total_spend, unrecorded_spend, usd
 from .sink import ChainBroken, IndexBrokenError, LedgerError
 from .verify import Broken, Verified, verify_run
 
@@ -39,6 +40,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "verify": ("check every run, the index and seals, or one run's chain", "docs/specs/S3-audit-ledger.md"),
     "show": ("print a run's ledger as a table", "docs/specs/S3-audit-ledger.md"),
     "seal": ("close a run's chain and anchor it in INDEX.jsonl", "docs/specs/S3-audit-ledger.md"),
+    "spend": ("sum a run's spend entries against its charter budget", "docs/specs/S3-audit-ledger.md"),
     "session": ("archive a redacted session transcript", "docs/specs/S3-audit-ledger.md"),
     "charter": ("write, check, approve or render a run charter", "docs/specs/S1-run-charter.md"),
     "import-tsv": ("convert a show-me-your-work decisions.tsv into a run", "docs/specs/S3-audit-ledger.md"),
@@ -333,6 +335,7 @@ def _add_seal_args(p: argparse.ArgumentParser) -> None:
 def _seal(ns: argparse.Namespace) -> int:
     def body() -> int:
         root = _root(ns)
+        unrecorded = unrecorded_spend(repo_sink(root).read(ns.run_id).entries)
         try:
             r = seal_run(repo_sink(root), root, ns.run_id, actor=ns.actor, why=ns.why)
         except GitError as e:
@@ -340,12 +343,61 @@ def _seal(ns: argparse.Namespace) -> int:
         if r.new:
             print(f"sealed {ns.run_id} at seq {r.entry.seq}, commit {r.entry.data['commit'][:12]}; "
                   f"indexed in .audit/INDEX.jsonl. Commit both files.")
+            if unrecorded is not None:
+                print(f"warning: no spend entry after the last verification (seq {unrecorded.seq}), so the "
+                      f"sealed run is missing its final spend; record spend when each unit is verified "
+                      f"(`ledger spend` checks it against the budget)", file=sys.stderr)
         elif r.indexed:
             print(f"{ns.run_id} was already sealed (seq {r.entry.seq}); added its line to .audit/INDEX.jsonl")
         else:
             print(f"{ns.run_id} is already sealed (seq {r.entry.seq}) and indexed; nothing to do")
         return EXIT_OK
     return _guard("seal", ns, body)
+
+
+def _add_spend_args(p: argparse.ArgumentParser) -> None:
+    p.description = ("Add up the run's spend entries (each records spend since the previous one) and compare "
+                     "them with the charter's budget. Exit 0 under every limit, 1 at or over one (the spend "
+                     "gate), 2 unreadable.")
+    p.add_argument("run_id", metavar="RUN_ID", help="the run to check")
+    _add_root_arg(p)
+
+
+def _spend(ns: argparse.Namespace) -> int:
+    def body() -> int:
+        sink = _sink(ns)
+        total = total_spend(sink.read(ns.run_id).entries)
+        path = sink.run_dir(ns.run_id) / CHARTER_FILE
+        budget = read_charter(path).fields.get("budget") if path.is_file() else None
+        est = f", {total.estimated} estimated" if total.estimated else ""
+        print(f"{ns.run_id}: {total.entries} spend entr{'y' if total.entries == 1 else 'ies'}{est}")
+        reached = []
+        for lim in limits(total, budget):
+            show = usd if lim.name == "usd" else (lambda n: f"{n:,}")
+            if lim.limit is None:
+                print(f"  {lim.name:<6} {show(lim.used)} used; no limit in the charter")
+            elif lim.reached:
+                reached.append(lim.name)
+                print(f"  {lim.name:<6} {show(lim.used)} used of {show(lim.limit)}: "
+                      f"{show(lim.used - lim.limit)} over")
+            else:
+                print(f"  {lim.name:<6} {show(lim.used)} used of {show(lim.limit)}, "
+                      f"{show(lim.limit - lim.used)} left")
+        if total.skipped:
+            print(f"note: not counted, no valid data.usd_micros: seq {', '.join(map(str, total.skipped))}")
+        if budget is None:
+            print("note: no charter budget, so nothing to check against" if path.is_file()
+                  else f"note: no {CHARTER_FILE}, so nothing to check against")
+        if reached:
+            print(f"LIMIT REACHED: {' and '.join(reached)}. This is the spend gate: stop and ask the human")
+            return EXIT_FAILED
+        return EXIT_OK
+
+    try:
+        return _guard("spend", ns, body)
+    except CharterError as e:
+        print(f"ledger spend: {e}", file=sys.stderr)
+        return EXIT_ERROR
 
 
 def _human(text: str) -> HumanActor:
@@ -494,6 +546,7 @@ HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[a
     "show": (_add_show_args, _show),
     "session": (_add_session_args, _session),
     "seal": (_add_seal_args, _seal),
+    "spend": (_add_spend_args, _spend),
     "charter": (_add_charter_args, _charter),
     "scan": (_add_scan_args, _scan),
 }
