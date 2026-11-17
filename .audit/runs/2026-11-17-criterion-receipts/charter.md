@@ -6,7 +6,7 @@ predicate: "In curator, the unit 5 PR body carries a table printed by `ledger re
 scope:
   - agent-ledger: [docs/specs/S3-audit-ledger.md, src/agent_ledger/**, tests/**, README.md, ROADMAP.md, IDEAS.md, pyproject.toml, .audit/runs/2026-11-17-criterion-receipts/**]
   - agent-kit: [plugins/bstack/**, tests/**, docs/**, kit.yaml, changes.yaml, ROADMAP.md]
-  - agentfiles: [agentfiles.lock]
+  - agentfiles: [agentfiles.lock, sources.yaml]
   - curator: [.audit/**, .github/workflows/**, .claude/skills/verify-curator/**, .agents/skills/verify-curator/**, AGENTS.md, ".gitignore"]
 budget: {usd: 50, tokens: 8000000, wall_clock: 8h, max_parallel_agents: 2}
 estimate: {usd: 40, tokens: 6000000, wall_clock: 6h, calls: {rollouts: 0, reviews: 8}}
@@ -84,7 +84,7 @@ Units 2 to 5 are one PR each. Each lands on its own and is verified before the n
    playbook case showing an agent given a phase PR produces receipts unprompted. bstack minor
    version bump.
 4. **agentfiles: re-pin.** After Beau tags agent-ledger 1.1.0 and merges unit 3, update the two
-   lock entries. Verified by: `agentfiles sync` on this Mac, then `ledger --version` prints
+   lock entries, and the ledger's `ref` in `sources.yaml` from `v1.0.0` to `v1.1.0`. Verified by: `agentfiles sync` on this Mac, then `ledger --version` prints
    1.1.0 and the installed Product phase playbook has the receipt rule.
 5. **curator: adopt and prove.** Add `.audit/`, the `ledger-verify` job, and receipt writing in
    `verify-curator verify`. The PR re-runs P2e C8's probe and carries the table. The receipt
