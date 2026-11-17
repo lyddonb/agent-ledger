@@ -2,7 +2,7 @@
 run_id: 2026-11-17-criterion-receipts
 title: "Criterion receipts: every checked criterion carries a ledger receipt"
 tier: 2                      # 1 routine, 2 significant, 3 critical
-predicate: "In curator, the unit 5 PR body carries a table printed by `ledger receipts` from that PR's own run with a VERIFIED row for P2e-C8 at the PR head commit; `ledger verify --base origin/main` passes there; and `check-product.py --receipts` exits non-zero on a test branch that checks P2e-C2 with no receipt and exits 0 once a VERIFIED receipt for it exists"
+predicate: "In curator, the unit 5 PR body carries a table printed by `ledger receipts` from that PR's own run with a VERIFIED row for P2e-C8 at a commit whose tree matches the PR head outside `.audit/` and the phase spec; `ledger verify --base origin/main` passes there; and `check-product.py --receipts` exits non-zero on a test branch that checks P2e-C2 with no receipt and exits 0 once a VERIFIED receipt for it exists"
 scope:
   - agent-ledger: [docs/specs/S3-audit-ledger.md, src/agent_ledger/**, tests/**, README.md, ROADMAP.md, IDEAS.md, pyproject.toml, .audit/runs/2026-11-17-criterion-receipts/**]
   - agent-kit: [plugins/bstack/**, tests/**, docs/**, kit.yaml, changes.yaml, ROADMAP.md]
@@ -79,7 +79,7 @@ Units 2 to 5 are one PR each. Each lands on its own and is verified before the n
    command run against unit 1's hand-written ledger. `public-api` gate fires here.
 3. **agent-kit: write, render, enforce.** `verify-work` and `show-me-your-work` say how to write
    a receipt. Opening a PR includes the table. Product phase step 4 checks a box only with a
-   passing receipt at the PR's head commit. `check-product.py --receipts <run-id>` fails when a
+   passing receipt whose commit matches the PR head outside `.audit/` and the spec. `check-product.py --receipts <run-id>` fails when a
    box checked in the diff has no passing receipt. Verified by: the script's tests, and one Eval
    playbook case showing an agent given a phase PR produces receipts unprompted. bstack minor
    version bump.
@@ -87,7 +87,8 @@ Units 2 to 5 are one PR each. Each lands on its own and is verified before the n
    lock entries. Verified by: `agentfiles sync` on this Mac, then `ledger --version` prints
    1.1.0 and the installed Product phase playbook has the receipt rule.
 5. **curator: adopt and prove.** Add `.audit/`, the `ledger-verify` job, and receipt writing in
-   `verify-curator verify`. The PR re-runs P2e C8's probe at its head and carries the table.
+   `verify-curator verify`. The PR re-runs P2e C8's probe and carries the table. The receipt
+   names the commit the probe ran on; the ledger commit that follows it changes only `.audit/`.
    Verified by: the predicate. This unit waits until no open curator PR touches
    `verify-curator`.
 
