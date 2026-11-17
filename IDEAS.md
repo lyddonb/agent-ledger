@@ -20,7 +20,7 @@ Context and reasoning: [docs/notes/steering-beyond-automation.md](docs/notes/ste
 
 Context and reasoning: [docs/notes/intent-over-steps.md](docs/notes/intent-over-steps.md). agent-kit's roadmap items R21 and R23 depend on these.
 
-- **Criterion receipts**: a `data` convention for verification entries that carries the criterion id (`P1-C3`), the probe that ran, pass or fail, and evidence pointers, plus `ledger receipts <run-id>` to print them as the table a PR body carries. Check whether it fits format v1 as a convention inside `data` (it should: no new fields).
+- **Criterion receipts**: shipped in 1.1.0 (S3, "Receipt entries").
 - **`rejection` entries**: when the human rejects work whose checks passed, record what was rejected, the missing criterion or probe, and the criterion added. `reflect` and `correct` in agent-kit read them across sessions. A new entry type, so check it against format v1 like `steer` and `disagreement`.
 - **Fix proofs**: a verification entry that cites the probe failing on the base commit and passing on the fix commit, so "the fix counts only when the old code fails" is checkable from the ledger.
 
