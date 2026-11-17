@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import _git
 from .index import COMMIT_RE, INDEX_FILE
+from .receipt import parse_receipt
 from .redact import Redactor, Unconfirmed
 from .entry import (HUMAN_ONLY_TYPES, TS_FORMAT, TS_RE, Actor, ChainHead, Entry, EntryError, EntryType,
                     HumanActor, next_entry)
@@ -106,6 +107,12 @@ def check_spend(entry_type: EntryType, data: Mapping[str, Any] | None) -> None:
         raise EntryError("schema", "data.estimate must be true or false")
 
 
+def check_receipt(entry_type: EntryType, data: Mapping[str, Any] | None) -> None:
+    """S3 "Receipt entries": a verification entry's data.receipt, when present, follows the
+    receipt rules. An entry with no receipt is unchanged."""
+    if entry_type is EntryType.VERIFICATION:
+        parse_receipt(data or {})
+
 
 class RedactionRefused(LedgerError):
     """An entry's own text couldn't be confirmed clean after redaction, so it wasn't written."""
@@ -165,6 +172,7 @@ def append(
     summary, why, evidence, data = fields["summary"], fields["why"], fields["evidence"], fields["data"]
     check_imported(data)
     check_spend(type, data)
+    check_receipt(type, data)
     check_typed_by(actor, type, data)
     if type is EntryType.SEAL and not _sealing:
         raise LedgerError("a seal entry is written by `ledger seal`, which also indexes it")

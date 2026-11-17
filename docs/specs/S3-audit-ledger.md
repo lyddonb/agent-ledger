@@ -61,6 +61,34 @@ Each is a non-negative integer except `estimate`, a boolean. Other keys are allo
 
 **Spend entries add up.** Each `spend` entry records spend since the previous `spend` entry, never a running total, so the run's spend is the sum of its entries. Parallel agents can then each record their own spend without reading anyone else's. Record one when each unit is verified. `ledger spend <run-id>` adds up `usd_micros` and `tokens` and compares them with the charter's `budget.usd` and `budget.tokens`. It exits 0 under both limits and 1 at or over either one (the `spend` gate, S1 "Budget"). An entry with no valid `usd_micros` (written before the rule above) isn't counted, and the command names its seq. The M0 run wrote running totals before this rule existed, so `ledger spend` overstates it: $138.50 against about $99.67 really spent. Decided by Beau on 2026-11-15 in chat ("approve the additive spend line in S3"); no run was open to record it in.
 
+### Receipt entries
+
+A receipt records that one criterion's probe ran: which criterion, which probe, on which commit, and what came back. It is a `verification` entry whose `data` has a `receipt` object beside `verdict`. A `verification` entry with no `receipt` is unchanged by this section.
+
+| Key | Required | Meaning |
+|---|---|---|
+| `verdict` | yes | `VERIFIED`, `NOT VERIFIED` or `INCONCLUSIVE`, beside `receipt`, not inside it |
+| `receipt.criterion` | yes | The criterion's id, qualified by its spec: `P2e-C8` is C8 in phase P2e. It matches `[A-Za-z][A-Za-z0-9]*-[A-Z][0-9]+` |
+| `receipt.spec` | yes | The repo path of the file that states the criterion |
+| `receipt.spec_sha256` | yes | That file's SHA-256 when the probe ran, as 64 lowercase hex characters, so the receipt still names the text it was checked against after the spec is edited |
+| `receipt.probe` | yes | The command that ran, or for a probe that is not a command, its name |
+| `receipt.commit` | yes | The commit the probe ran on: 40 or 64 lowercase hex characters |
+| `receipt.exit` | no | The probe's exit code, an integer, or `null` for a probe with none |
+| `receipt.dirty` | no | `true` when tracked files differed from `commit` while the probe ran |
+| `receipt.not_run` | no | The part of the criterion's probe that did not run |
+
+`spec`, `probe` and `not_run` are non-empty strings; `dirty` is a boolean. Other keys are allowed in `receipt`. A probe that never ran has no receipt: there is no fourth verdict.
+
+`VERIFIED` is a claim about the whole probe on the named commit, so three combinations are refused: `VERIFIED` with an `exit` other than `0` or `null`, `VERIFIED` with `not_run`, and `VERIFIED` with `dirty: true`. Record those as `INCONCLUSIVE`, or `NOT VERIFIED` when the probe failed.
+
+`ledger append` refuses a `verification` entry whose `receipt` breaks these rules; `verify` doesn't check them, because like spend entries they are a convention inside `data`, not part of format v1.
+
+**A receipt is a specific claim, not a proof.** The ledger shows the entry was not edited afterward. It cannot show the probe ran. A receipt names the command and the commit so that anyone can run it again, and the evidence pointer (a path and a hash) is to output that may not be reproducible byte for byte. Have a script write the receipt from the probe's exit code, not the agent from memory.
+
+**The commit is never the one that holds the receipt.** Committing the ledger makes a new commit. A check that a receipt is current compares the tree at `receipt.commit` with the tree at the head, ignoring `.audit/` and the spec file.
+
+`ledger receipts <run-id>` prints the run's receipts as a Markdown table for a pull request body, one row per criterion in id order: criterion, verdict, probe and exit code, commit, the entry's first evidence pointer, and the entry's seq. When a criterion has several receipts the last one is shown with a count of the earlier ones. A `verification` entry whose `receipt` breaks the rules above (written by a version before them) isn't shown, and the command names its seq. Text from a receipt is data: the table escapes it so it cannot add a row, a column or markup.
+
 ### Who typed a human's entry
 
 An `approval` or `gate-answer` names a human actor, but the human often doesn't type it: an agent relays their words from a chat. `ledger append` (and so `ledger charter approve`) refuses a human-actor `approval` or `gate-answer` unless its `data` says who typed it, in one of three ways:
@@ -139,6 +167,7 @@ The base check covers every `ledger.jsonl` under `.audit/runs` and `.audit/INDEX
 | `ledger session add <file> --run R --actor A [--session ID] [--redact-pattern P]...` | Redacts, compresses and stores a transcript, then appends a `session` entry with both hashes. Exit 0 archived (or unchanged since the last add), 1 not archived because redaction couldn't be confirmed (a `session` entry still records where the transcript is), 2 usage or read error (built in M0 unit 3) |
 | `ledger seal <run-id> --actor A [--why W]` | Writes the `seal` entry (its `prev` is the final hash; it names the HEAD commit) and appends the run to `INDEX.jsonl`. Re-running it indexes a sealed run that has no line (built in M0 unit 4). It warns when no `spend` entry follows the run's last `verification`, since the final unit's spend is then missing; it still seals |
 | `ledger spend <run-id>` | Adds up the run's `spend` entries and prints used, limit and what is left for the charter's `budget.usd` and `budget.tokens`, after verifying the run. Exit 0 under both limits, 1 at or over either (or the run fails verify), 2 unreadable (see Spend entries) |
+| `ledger receipts <run-id>` | Prints the run's receipts as a Markdown table, one row per criterion with its latest verdict, after verifying the run (see Receipt entries). Exit 0 printed, 1 the run fails verify, 2 unreadable |
 | `ledger charter ...` | Charter commands from S1 |
 | `ledger import-tsv <file>` | Converts an old `decisions.tsv` trail into a run |
 
