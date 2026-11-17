@@ -169,10 +169,15 @@ def append(
     """
     fields, _ = redact_fields(redactor or Redactor(), {
         "summary": summary, "why": why, "evidence": list(evidence), "data": dict(data or {})})
+    check_receipt(type, data)  # the caller's own mistake, reported before redaction can change the text
     summary, why, evidence, data = fields["summary"], fields["why"], fields["evidence"], fields["data"]
     check_imported(data)
     check_spend(type, data)
-    check_receipt(type, data)
+    try:
+        check_receipt(type, data)
+    except EntryError as e:
+        raise EntryError("schema", f"redaction changed the receipt, so it no longer follows the rules ({e}); "
+                                   f"a redaction pattern matches a value the receipt needs") from None
     check_typed_by(actor, type, data)
     if type is EntryType.SEAL and not _sealing:
         raise LedgerError("a seal entry is written by `ledger seal`, which also indexes it")

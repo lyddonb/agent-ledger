@@ -84,6 +84,9 @@ class RefusalTest(ReceiptTestCase):
             with self.subTest(criterion=bad):
                 self.refuse(data(criterion=bad), "data.receipt.criterion")
 
+    def test_a_criterion_number_has_no_leading_zero(self):
+        self.refuse(data(criterion="P2e-C08"), "data.receipt.criterion")
+
     def test_the_spec_hash_is_64_lowercase_hex(self):
         for bad in ("a" * 63, "a" * 65, "A" * 64, "g" * 64, "a" * 64 + "\n", 12):
             with self.subTest(spec_sha256=bad):
@@ -129,6 +132,18 @@ class RefusalTest(ReceiptTestCase):
             "--data", json.dumps({"verdict": "VERIFIED", "receipt": receipt(exit=3)}))
         self.assertEqual(code, 2, out + err)
         self.assertIn("data.receipt.exit", err)
+        self.assertEqual(self.count(), before)
+
+
+class RedactionTest(ReceiptTestCase):
+    def test_a_receipt_that_redaction_breaks_is_refused_and_the_error_says_redaction_did_it(self):
+        from agent_ledger.redact import Redactor
+        before = self.count()
+        with self.assertRaises(EntryError) as caught:
+            append(self.sink, RUN, actor=AGENT, type=EntryType.VERIFICATION, summary="s", why="w",
+                   data=data("VERIFIED"), redactor=Redactor(extra=[r"\b[0-9a-f]{40}\b"]))
+        self.assertIn("redaction changed the receipt", str(caught.exception))
+        self.assertIn("data.receipt.commit", str(caught.exception))
         self.assertEqual(self.count(), before)
 
 
@@ -185,7 +200,7 @@ class ReceiptsCliTest(ReceiptTestCase):
         for criterion in ("P2e-C10", "P2e-C2", "P10-C1", "P2e-B7", "P2-C1", "P2e-C1"):
             self.add(data(criterion=criterion))
         self.assertEqual([r.split(" | ")[0] for r in self.rows()],
-                         ["| P10-C1", "| P2-C1", "| P2e-B7", "| P2e-C1", "| P2e-C2", "| P2e-C10"])
+                         ["| P2-C1", "| P2e-B7", "| P2e-C1", "| P2e-C2", "| P2e-C10", "| P10-C1"])
 
     def test_a_run_with_no_receipts(self):
         code, out, _ = run_cli("receipts", RUN, "--root", self.root)
@@ -201,18 +216,31 @@ class ReceiptsCliTest(ReceiptTestCase):
         self.add(data("VERIFIED", criterion="P2e-C3"))
         code, out, err = run_cli("receipts", RUN, "--root", self.root)
         self.assertEqual(code, 0, err)
-        lines = out.splitlines()
-        self.assertEqual(len(lines), 5, out)
-        self.assertEqual(lines[-1], "note: not shown, receipt breaks the rules: seq 3, 4")
+        self.assertEqual(len(out.splitlines()), 4, out)  # the note is not in the table's output
+        self.assertEqual(err, "note: not shown, receipt breaks the rules: seq 3 (P2e-C8), seq 4 (P2e-C8)\n")
+
+    def test_a_row_says_when_a_later_receipt_for_its_criterion_cannot_be_read(self):
+        self.add(data("VERIFIED"))
+        head = self.sink.read(RUN).entries[-1].head
+        self.sink.write(next_entry(head, now=T0, actor=AGENT, type=EntryType.VERIFICATION, summary="old",
+                                   why="w", data=data("NOT VERIFIED", exit="1")))
+        self.add(data("VERIFIED", criterion="P2e-C9"))
+        c8, c9 = self.rows()
+        self.assertIn("| VERIFIED (a later receipt breaks the rules: seq 3) |", c8)
+        self.assertIn("| VERIFIED |", c9)
+
+    def test_an_imported_receipt_says_so(self):
+        marker = {"source": "decisions.tsv:4", "source_ts": "2026-10-01T00:00:00Z", "by": AGENT.id}
+        self.add({**data("VERIFIED"), "imported": marker})
+        self.assertTrue(self.rows()[0].endswith("| seq 2, imported |"), self.rows()[0])
 
     def test_only_invalid_receipts_still_says_no_receipts_and_names_them(self):
         head = self.sink.read(RUN).entries[-1].head
         self.sink.write(next_entry(head, now=T0, actor=AGENT, type=EntryType.VERIFICATION, summary="old",
                                    why="w", data={"receipt": 1}))
-        code, out, _ = run_cli("receipts", RUN, "--root", self.root)
+        code, out, err = run_cli("receipts", RUN, "--root", self.root)
         self.assertEqual(code, 0)
-        self.assertEqual(out.splitlines(), [f"{RUN}: no receipts",
-                                            "note: not shown, receipt breaks the rules: seq 2"])
+        self.assertEqual((out, err), (f"{RUN}: no receipts\n", "note: not shown, receipt breaks the rules: seq 2\n"))
 
     def test_a_run_that_fails_verify_exits_1_without_a_table(self):
         self.add(data("VERIFIED"))
@@ -313,6 +341,13 @@ class HostileTextPropertyTest(ReceiptTestCase):
                         cells = split_cells(line)
                         shown[cells[0]] = cells[1].split(" (")[0]
                     self.assertEqual(shown, last)
+
+    def test_invisible_and_line_breaking_characters_are_written_out(self):
+        self.add(data("INCONCLUSIVE", probe="bidi\u202eflip a\nb fill\u3164er x\u0336y", not_run="tab\there"))
+        row = self.table().splitlines()[2]
+        self.assertIn("`bidi\\u202eflip a\\u000ab fill\\u3164er x\\u0336y`", row)
+        self.assertIn("`tab\\u0009here`", row)
+        self.assertTrue(row.isascii(), row)
 
     def test_hostile_text_stays_inside_code_spans(self):
         self.add(data("INCONCLUSIVE", probe="<script>x</script> @octocat | `a` ![i](u)", not_run="@octocat <b>"))

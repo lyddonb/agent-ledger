@@ -68,7 +68,7 @@ A receipt records that one criterion's probe ran: which criterion, which probe, 
 | Key | Required | Meaning |
 |---|---|---|
 | `verdict` | yes | `VERIFIED`, `NOT VERIFIED` or `INCONCLUSIVE`, beside `receipt`, not inside it |
-| `receipt.criterion` | yes | The criterion's id, qualified by its spec: `P2e-C8` is C8 in phase P2e. It matches `[A-Za-z][A-Za-z0-9]*-[A-Z][0-9]+` |
+| `receipt.criterion` | yes | The criterion's id, qualified by its spec: `P2e-C8` is C8 in phase P2e. It matches `[A-Za-z][A-Za-z0-9]*-[A-Z](0\|[1-9][0-9]*)`: the number has no leading zero, so `C8` and `C08` can't be two criteria |
 | `receipt.spec` | yes | The repo path of the file that states the criterion |
 | `receipt.spec_sha256` | yes | That file's SHA-256 when the probe ran, as 64 lowercase hex characters, so the receipt still names the text it was checked against after the spec is edited |
 | `receipt.probe` | yes | The command that ran, or for a probe that is not a command, its name |
@@ -81,13 +81,19 @@ A receipt records that one criterion's probe ran: which criterion, which probe, 
 
 `VERIFIED` is a claim about the whole probe on the named commit, so three combinations are refused: `VERIFIED` with an `exit` other than `0` or `null`, `VERIFIED` with `not_run`, and `VERIFIED` with `dirty: true`. Record those as `INCONCLUSIVE`, or `NOT VERIFIED` when the probe failed.
 
-`ledger append` refuses a `verification` entry whose `receipt` breaks these rules; `verify` doesn't check them, because like spend entries they are a convention inside `data`, not part of format v1.
+`ledger append` refuses a `verification` entry whose `receipt` breaks these rules; `verify` doesn't check them, because like spend entries they are a convention inside `data`, not part of format v1. The rules are checked again after redaction. When a redaction pattern matches a value the receipt needs, such as the commit, the entry is refused and the error says redaction changed it.
 
 **A receipt is a specific claim, not a proof.** The ledger shows the entry was not edited afterward. It cannot show the probe ran. A receipt names the command and the commit so that anyone can run it again, and the evidence pointer (a path and a hash) is to output that may not be reproducible byte for byte. Have a script write the receipt from the probe's exit code, not the agent from memory.
 
 **The commit is never the one that holds the receipt.** Committing the ledger makes a new commit. A check that a receipt is current compares the tree at `receipt.commit` with the tree at the head, ignoring `.audit/` and the spec file.
 
-`ledger receipts <run-id>` prints the run's receipts as a Markdown table for a pull request body, one row per criterion in id order: criterion, verdict, probe and exit code, commit, the entry's first evidence pointer, and the entry's seq. When a criterion has several receipts the last one is shown with a count of the earlier ones. A `verification` entry whose `receipt` breaks the rules above (written by a version before them) isn't shown, and the command names its seq. Text from a receipt is data: the table escapes it so it cannot add a row, a column or markup.
+`ledger receipts <run-id>` prints the run's receipts as a Markdown table for a pull request body, one row per criterion: criterion, verdict, probe and exit code, commit, the entry's first evidence pointer, and the entry's seq.
+
+- **Order.** Rows are in natural id order: `P2` before `P2e` before `P10`, and `C2` before `C10`.
+- **Several receipts for one criterion.** The last one is shown, with a count of the earlier ones.
+- **A receipt that breaks the rules** (written by a version before them) isn't shown. The command names its seq, and its criterion when that is readable, on stderr: a line printed straight after a Markdown table would render as one more row. When such a receipt is later than the row shown for its criterion, the row says so, because the newest record for that criterion could not be read.
+- **An imported receipt** (`data.imported`) is marked `imported` in the entry cell. It was transcribed from an older record, not written when a probe ran.
+- **Text from a receipt is data.** Each piece sits in a code span. A pipe is escaped, and line breaks and invisible or bidi-affecting characters are written as `\uXXXX`, as `ledger show` writes them. Receipt text cannot add a row, a column or markup, or display as something other than what it says.
 
 ### Who typed a human's entry
 
