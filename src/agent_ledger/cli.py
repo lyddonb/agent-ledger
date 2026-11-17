@@ -20,6 +20,7 @@ from .charter import (CHARTER_FILE, CharterError, approval_status, approve_chart
                       new_charter, read_charter)
 from .entry import Actor, EntryError, EntryType, HumanActor, _actor_from_wire
 from .redact import PolicyError, Redactor, base_policy_patterns, policy_patterns
+from .receipt import latest_receipts, render_table
 from .run import IMPORTED_KEY, append, find_root, init_run, repo_sink, run_id_for, seal_run, utc_now
 from ._git import GitError
 from .repo_verify import verify_repo
@@ -41,6 +42,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "show": ("print a run's ledger as a table", "docs/specs/S3-audit-ledger.md"),
     "seal": ("close a run's chain and anchor it in INDEX.jsonl", "docs/specs/S3-audit-ledger.md"),
     "spend": ("sum a run's spend entries against its charter budget", "docs/specs/S3-audit-ledger.md"),
+    "receipts": ("print a run's verification receipts as a Markdown table", "docs/specs/S3-audit-ledger.md"),
     "session": ("archive a redacted session transcript", "docs/specs/S3-audit-ledger.md"),
     "charter": ("write, check, approve or render a run charter", "docs/specs/S1-run-charter.md"),
     "import-tsv": ("convert a show-me-your-work decisions.tsv into a run", "docs/specs/S3-audit-ledger.md"),
@@ -284,6 +286,26 @@ def _show(ns: argparse.Namespace) -> int:
         print(f"{report.run_id}: {len(report.entries)} entries, verified; head {report.head.link}")
         return EXIT_OK
     return _guard("show", ns, body)
+
+
+def _add_receipts_args(p: argparse.ArgumentParser) -> None:
+    p.description = ("Print the run's receipts as a Markdown table for a pull request body: one row per "
+                     "criterion, its latest verdict. Exit 0 printed, 1 the run fails verify, 2 unreadable.")
+    p.add_argument("run_id", metavar="RUN_ID", help="the run to print")
+    _add_root_arg(p)
+
+
+def _receipts(ns: argparse.Namespace) -> int:
+    def body() -> int:
+        found = latest_receipts(_sink(ns).read(ns.run_id).entries)
+        if found.rows:
+            print(render_table(found.rows))
+        else:
+            print(f"{ns.run_id}: no receipts")
+        if found.invalid:
+            print(f"note: not shown, receipt breaks the rules: seq {', '.join(map(str, found.invalid))}")
+        return EXIT_OK
+    return _guard("receipts", ns, body)
 
 
 def _add_session_args(p: argparse.ArgumentParser) -> None:
@@ -544,6 +566,7 @@ HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[a
     "append": (_add_append_args, _append),
     "verify": (_add_verify_args, _verify),
     "show": (_add_show_args, _show),
+    "receipts": (_add_receipts_args, _receipts),
     "session": (_add_session_args, _session),
     "seal": (_add_seal_args, _seal),
     "spend": (_add_spend_args, _spend),
