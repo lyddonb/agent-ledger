@@ -411,8 +411,11 @@ class TamperTest(unittest.TestCase):
     def test_a_gitattributes_conversion_cannot_change_what_merges(self):
         (self.repo.root / ".gitattributes").write_text("*.jsonl working-tree-encoding=IBM037\n")
         self.repo.start(RUN_B, n=0)
-        path = self.repo.ledger(RUN_A)
         self.repo.git("add", "-A")
+        # Re-hash every tracked file through the new attributes. Without this, whether `add -A`
+        # re-reads alpha's ledger depends on git's racy-clean timing, and the test failed about 1
+        # run in 200 when a commit landed just before a second boundary.
+        self.repo.git("add", "--renormalize", ".")
         self.repo.git("commit", "-q", "-m", "pr: attributes")
         self.repo.git("checkout", "-q", "--", ".")
         report, kinds = self.repo.kinds(base=self.base)
