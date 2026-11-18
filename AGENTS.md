@@ -6,3 +6,4 @@
 - Tests: `python -m unittest discover -s tests -v`. Chain and redaction code needs property-style tests with fixed seeds.
 - Never put real secrets in tests. Use obviously fake ones that still match the patterns.
 - The M0 charter in `.audit/runs/2026-10-18-m0-foundation/` sets scope, gates and budget for current work. Read it before starting.
+- Plans that span the runtime's repos live in the private repo `lyddonb/agent-runtime` under `plans/`. Read the plan there before starting work it covers, and change it by pull request. Never keep a plan only in a chat, a hosted project doc or a local folder.
