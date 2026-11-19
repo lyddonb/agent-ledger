@@ -13,18 +13,25 @@ Everything goes through one helper, `control-ledger`. Run it from the repo root 
 
 ## Cold start: the whole sequence
 
-From the agent-ledger repo root:
+Each line below works as its own shell call, so the sequence survives a tool that resets the working directory and environment between commands. `<repo>` is the absolute path of the agent-ledger checkout, and `<ws>` is the absolute path on the `workspace` line that `launch` prints.
 
 ```bash
-C=.agents/skills/verify-ledger/scripts/control-ledger
-$C launch                      # prints: workspace <dir>, evidence <dir>, then "ready: export VERIFY_LEDGER_WS=<dir>"
-export VERIFY_LEDGER_WS=<the workspace dir it printed>
-$C doctor                      # every line "ok", last line "doctor: ready to drive", exit 0
-$C drive all                   # one PASS line per feature, last line "PASSED: 5/5 features; evidence in <dir>", exit 0
-$C cleanup                     # "removed <workspace>; evidence kept in <dir>"
+<repo>/.agents/skills/verify-ledger/scripts/control-ledger launch
+#   workspace <ws>
+#   evidence  <repo>/.verify/ledger/<ws name>
+#   target    <repo> @ <commit>
+#   ready: export VERIFY_LEDGER_WS=<ws>
+<repo>/.agents/skills/verify-ledger/scripts/control-ledger doctor --ws <ws>
+#   every line "ok", last line "doctor: ready to drive", exit 0
+<repo>/.agents/skills/verify-ledger/scripts/control-ledger drive all --ws <ws>
+#   one PASS line per feature, last line "PASSED: 5/5 features; evidence in <evidence>", exit 0
+<repo>/.agents/skills/verify-ledger/scripts/control-ledger cleanup --ws <ws>
+#   "removed <ws>; evidence kept in <evidence>"
 ```
 
-To drive one feature instead of all of them, run `$C drive <feature>` with a feature name from the map below. Each feature runs once per workspace. To drive it again, run `cleanup`, then `launch` a new workspace.
+The evidence is then in the `evidence` folder that `launch` printed, and `drive-all.json` in it says `"ok": true`. In one persistent shell, you can `export VERIFY_LEDGER_WS=<ws>` once and leave out `--ws`. The examples below write the script as `$C` and leave out `--ws`.
+
+To drive one feature instead of all of them, run `drive <feature> --ws <ws>` with a feature name from the map below. Each feature runs once per workspace. To drive it again, run `cleanup`, then `launch` a new workspace.
 
 Pass looks like this: `drive` exits 0, every feature line says `PASS`, and `<evidence>/drive-all.json` has `"ok": true`.
 

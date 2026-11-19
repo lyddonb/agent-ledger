@@ -24,7 +24,7 @@ Preconditions:
 - A fresh workspace from `$C launch`, with `$C doctor` exiting 0.
 - No run ending in `-chain` under `.audit/runs/`.
 
-- **Start a run.** Run `$C cli -- init chain --actor '<agent JSON>'`, or let `$C drive run-chain` do it. Exit 0, stdout `started <run-id>: ... seq 0 <hash>`, and `ledger.jsonl` has 1 line.
+- **Start a run.** Run `$C cli -- init chain --actor '<agent JSON>'`, or let `$C drive run-chain` do it. Exit 0, stdout `started <run-id>: ... seq 1 <hash>`, and `ledger.jsonl` has 1 line.
 - **Append a decision.** `append --run <run-id> --actor '<agent JSON>' --type decision --summary "Chose the repo sink" --why ... --evidence README.md`. Exit 0, stdout `appended <run-id> seq 1 <hash>`, and `ledger.jsonl` has 2 lines.
 - **Show it.** `show <run-id>`. Exit 0. The table has a `decision` row with the summary, and the footer reads `<run-id>: 2 entries, verified`.
 - **Verify one run.** `verify .audit/runs/<run-id>`. Exit 0, and stdout starts `ok <run-id>: 2 entries`.

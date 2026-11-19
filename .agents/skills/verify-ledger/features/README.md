@@ -4,8 +4,8 @@ This folder is the maintained record of what a user can do with the `ledger` CLI
 
 ## Baseline preconditions
 
-- Run from the agent-ledger repo root, with `C=.agents/skills/verify-ledger/scripts/control-ledger`.
-- `$C launch` has made a fresh workspace, and `VERIFY_LEDGER_WS` names it. Its `repo/` is its own git repo with one commit and an empty `.audit/`, and its `home/` is HOME for every ledger command.
+- `$C` is `<repo>/.agents/skills/verify-ledger/scripts/control-ledger`, as an absolute path.
+- `$C launch` has made a fresh workspace. Every other command gets it as `--ws <ws>`, or from `VERIFY_LEDGER_WS` in one persistent shell. Its `repo/` is its own git repo with one commit and an empty `.audit/`, and its `home/` is HOME for every ledger command.
 - `$C doctor` exits 0, and its `code-under-test` line names this checkout's `src/`.
 - Never drive the repo's own `.audit/`, or a workspace that `launch` didn't create.
 
