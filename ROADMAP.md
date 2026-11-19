@@ -32,10 +32,10 @@ hard rules: `qualitydirector` takes brief numbers from `summary --json` and neve
 them; the Product phase playbook never ticks a box without `receipt.py`; no flaky test is
 re-run. agent-kit's CI runs only the cases for plugins its `check_versions.py` reports as
 changed.
-**Depends on:** agent-kit R38 with four weeks of rows, so cases come from sessions that
-happened. H8 (does M3 open early?) and H9 (may evals spend model calls in CI?).
-**Playbook:** Prototype first: how to capture tool calls from `claude -p` and from one other
-tool. Then Multi-phase plan.
+**Depends on:** agent-kit R38, so cases come from sessions that happened. H8 (does M3 open
+early?) and H9 (may evals spend model calls in CI?).
+**Playbook:** Prototype first, to settle how to capture tool calls from `claude -p` and from
+one other tool. Then Feature, split into PRs with the Multi-phase plan playbook.
 **Done when:** each first case fails on a skill edit that removes the rule it guards, and
 passes on agent-kit's main three times in a row.
 **Why not done:** agent-kit's R3 and R13 waited on real prompts. Its R38 finds them.
