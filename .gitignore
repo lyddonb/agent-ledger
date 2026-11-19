@@ -7,3 +7,5 @@ build/
 dist/
 # A ledger temp file left by a crash during `ledger init`
 .ledger.jsonl.*.tmp
+# Evidence from the verify-ledger skill (control-ledger launch)
+.verify/
