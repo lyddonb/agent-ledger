@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""stress-ledger: run the verify-ledger cold-start sequence N times in a row and count passes.
+
+Each run is exactly what SKILL.md tells a reader to do: `control-ledger launch`, `doctor`,
+`drive all`, `cleanup`, each in a fresh workspace with an empty .audit/. No retries, and a failed
+run never stops the loop. A run passes only when every command exits 0, the evidence survives
+cleanup with drive-all.json saying ok, the workspace is gone, and the checkout's own .audit/ is
+byte-for-byte unchanged.
+
+Example: stress-ledger --runs 20 --evidence-root /tmp/r27-stress
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import sys
+
+if sys.version_info < (3, 10) and not os.environ.get("CONTROL_LEDGER_REEXEC"):
+    for _name in ("python3.13", "python3.12", "python3.14", "python3.11", "python3.10"):
+        _exe = shutil.which(_name)
+        if _exe:
+            os.environ["CONTROL_LEDGER_REEXEC"] = "1"
+            os.execv(_exe, [_exe, os.path.abspath(__file__), *sys.argv[1:]])
+    sys.exit("stress-ledger: needs Python 3.10 or newer on PATH")
+
+import argparse  # noqa: E402
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import platform  # noqa: E402
+import statistics  # noqa: E402
+import subprocess  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+CONTROL = Path(__file__).resolve().parent / "control-ledger"
+SKILL_REPO = Path(__file__).resolve().parents[4]
+
+
+def tree_hash(folder: Path) -> str:
+    h = hashlib.sha256()
+    if folder.is_dir():
+        for p in sorted(folder.rglob("*")):
+            if p.is_file():
+                h.update(p.relative_to(folder).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+def machine() -> str:
+    cpu = platform.processor() or platform.machine()
+    try:
+        cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True,
+                             timeout=5).stdout.strip() or cpu
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return f"{platform.system()} {platform.release()} {platform.machine()}, {cpu}, {os.cpu_count()} cpus"
+
+
+def one_run(i: int, target: Path, evidence_root: Path, guard: Path) -> dict:
+    before = tree_hash(guard)
+    start = time.monotonic()
+    rec: dict = {"run": i, "steps": []}
+
+    def call(*args: str) -> subprocess.CompletedProcess:
+        proc = subprocess.run([sys.executable, str(CONTROL), *args], capture_output=True, text=True, timeout=600)
+        rec["steps"].append({"argv": ["control-ledger", *args], "exit": proc.returncode,
+                             "stdout": proc.stdout[-4000:], "stderr": proc.stderr[-4000:]})
+        return proc
+
+    launch = call("launch", "--json", "--target", str(target), "--evidence-root", str(evidence_root))
+    ws = evidence = None
+    if launch.returncode == 0:
+        m = json.loads(launch.stdout)
+        ws, evidence = Path(m["workspace"]), Path(m["evidence"])
+        call("doctor", "--ws", str(ws))
+        call("drive", "all", "--ws", str(ws))
+        call("cleanup", "--ws", str(ws))
+    rec["seconds"] = round(time.monotonic() - start, 3)
+    problems = [f"{' '.join(s['argv'][:2])} exit {s['exit']}" for s in rec["steps"] if s["exit"] != 0]
+    if len(rec["steps"]) != 4:
+        problems.append("did not reach every step")
+    summary = evidence / "drive-all.json" if evidence else None
+    if summary is None or not summary.is_file():
+        problems.append("no drive-all.json in the evidence after cleanup")
+    elif json.loads(summary.read_text())["ok"] is not True:
+        problems.append("drive-all.json says not ok: " + ", ".join(
+            f["feature"] for f in json.loads(summary.read_text())["features"] if not f["ok"]))
+    if ws is not None and ws.exists():
+        problems.append(f"workspace {ws} still exists")
+    if tree_hash(guard) != before:
+        problems.append(f"{guard} changed")
+    rec.update(ok=not problems, problems=problems, workspace=str(ws), evidence=str(evidence))
+    return rec
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(prog="stress-ledger", description=__doc__.split("\n\n")[1],
+                                epilog="Example: stress-ledger --runs 20 --evidence-root /tmp/r27-stress")
+    p.add_argument("--runs", type=int, default=20, help="consecutive runs (default 20)")
+    p.add_argument("--target", default=str(SKILL_REPO), help="the agent-ledger checkout under test (default: this one)")
+    p.add_argument("--evidence-root", required=True,
+                   help="where each run's evidence folder goes; stress.jsonl and the summary land here too")
+    ns = p.parse_args()
+    root = Path(ns.evidence_root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    target = Path(ns.target).resolve()
+    log = root / "stress.jsonl"
+    log.write_text("", encoding="utf-8")
+    print(f"stress-ledger: {ns.runs} consecutive runs against {target}")
+    print(f"machine: {machine()}; python {platform.python_version()}")
+    total_start = time.monotonic()
+    results = []
+    for i in range(1, ns.runs + 1):
+        r = one_run(i, target, root, target / ".audit")
+        results.append(r)
+        with log.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(r, sort_keys=True) + "\n")
+        print(f"run {i:>2}: {'PASS' if r['ok'] else 'FAIL'} {r['seconds']:6.2f}s"
+              + ("" if r["ok"] else "  " + "; ".join(r["problems"])))
+    total = time.monotonic() - total_start
+    secs = [r["seconds"] for r in results]
+    passed = sum(r["ok"] for r in results)
+    summary = {"runs": ns.runs, "passed": passed, "total_seconds": round(total, 2), "min": min(secs),
+               "median": round(statistics.median(secs), 3), "max": max(secs), "machine": machine(),
+               "python": platform.python_version(), "target": str(target)}
+    (root / "stress-summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    print(f"passed {passed}/{ns.runs}; total {total:.1f}s; per run min {min(secs):.2f}s, "
+          f"median {statistics.median(secs):.2f}s, max {max(secs):.2f}s")
+    print(f"log: {log}")
+    return 0 if passed == ns.runs else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
