@@ -11,6 +11,8 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | H5 | Pick the project for the M0 gate run | Needed by M0 unit 9 |
 | H6 | Allow only merge commits on `main` (turn off squash and rebase merging) | Done 2026-11-10: squash and rebase merging off, merge commits on |
 | H7 | Require the `ledger-verify` check on `main` | Done 2026-11-14: required with the three test checks, strict |
+| H8 | Decide whether M3 unit 1 opens before M1 and M2 | Needed by M3 unit 1 |
+| H9 | Decide whether evals may spend model calls in CI | Needed by M3 unit 1 |
 
 ### H1. Confirm the name
 Renaming is cheap until the repo is public and `uses: lyddonb/agent-ledger@v1` appears in other repos' CI. Rename the folder, `pyproject.toml`, the README and the specs if you want something else.
@@ -50,3 +52,9 @@ Once the `ledger` workflow is on `main` and `ledger-verify` has run on a pull re
 gh api -X POST repos/lyddonb/agent-ledger/branches/main/protection/required_status_checks/contexts -f 'contexts[]=ledger-verify'
 ```
 Every project that adopts the Action needs the same rule.
+
+### H8. Does M3 unit 1 open before M1 and M2?
+The roadmap starts each milestone when the one before passes its gate. M3 unit 1 (hard rules as tool-call checks) is small and does not need M1's review entries or M2's enforcement. Decide: open it early, once agent-kit R38 has four weeks of rows, or hold it until M1 and M2 are done.
+
+### H9. May evals spend model calls in CI?
+Each case in M3 unit 1 is a headless agent run, so it costs model calls. Decide: give agent-kit's CI a secret and a budget line in the CFO books, or run the cases locally only until the cost per run is known. Either way the cases run only for changed plugins.
