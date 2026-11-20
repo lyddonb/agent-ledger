@@ -1,0 +1,755 @@
+#!/usr/bin/env python3
+"""control-ledger: drive the real `ledger` CLI from an empty .audit/ and keep the evidence.
+
+Every command runs the agent-ledger checkout's own code (`<target>/ci/run_ledger.py`, the same
+entry point the installed `ledger` shim and the ledger-verify Action run), never the `ledger` on
+PATH, inside a throwaway git repo with its own HOME. Standard library only.
+
+Start with `control-ledger --help`, then `control-ledger <command> --help`.
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import sys
+
+MIN_PYTHON = (3, 10)
+
+
+def _reexec_on_a_newer_python() -> None:
+    # agent-ledger needs 3.10+, and on macOS `python3` is often 3.9. Find a newer one on PATH.
+    if sys.version_info >= MIN_PYTHON or os.environ.get("CONTROL_LEDGER_REEXEC"):
+        return
+    for name in ("python3.13", "python3.12", "python3.14", "python3.11", "python3.10"):
+        exe = shutil.which(name)
+        if exe:
+            os.environ["CONTROL_LEDGER_REEXEC"] = "1"
+            os.execv(exe, [exe, os.path.abspath(__file__), *sys.argv[1:]])
+    sys.exit(f"control-ledger: needs Python 3.10 or newer (this is {sys.version.split()[0]}) and found none "
+             f"on PATH as python3.10 to python3.14; run it as `<python3.10+> {sys.argv[0]} ...`")
+
+
+_reexec_on_a_newer_python()
+
+import argparse  # noqa: E402
+import gzip  # noqa: E402
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import platform  # noqa: E402
+import re  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+import time  # noqa: E402
+from dataclasses import dataclass, field  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any, Callable  # noqa: E402
+
+SCRIPT = Path(__file__).resolve()
+SKILL_REPO = SCRIPT.parents[4]  # <repo>/.agents/skills/verify-ledger/scripts/control-ledger
+MARKER = "control-ledger.json"
+TOOL = "control-ledger"
+WS_ENV = "VERIFY_LEDGER_WS"
+LEDGER_TIMEOUT_S = 120
+
+EXIT_OK, EXIT_FAILED, EXIT_HARNESS = 0, 1, 2
+
+AGENT = {"kind": "agent", "id": "verify-ledger@control-ledger#0000", "on_behalf_of": "verify-ledger@github",
+         "tool": "control-ledger", "model": "none", "session": "verify-ledger"}
+HUMAN = {"kind": "human", "id": "verify-ledger-human", "on_behalf_of": "verify-ledger-human@github"}
+
+
+class HarnessError(Exception):
+    """The harness itself can't do its job (bad workspace, missing target). Exit 2, not a feature failure."""
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _git(cwd: Path, *args: str, home: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    if home is not None:
+        env["HOME"] = str(home)
+    proc = subprocess.run(["git", "-C", str(cwd), "-c", "user.name=verify-ledger",
+                           "-c", "user.email=verify-ledger@example.invalid", "-c", "commit.gpgsign=false",
+                           "-c", "core.hooksPath=/dev/null", *args],
+                          capture_output=True, text=True, env=env, timeout=60)
+    if check and proc.returncode != 0:
+        raise HarnessError(f"git {' '.join(args)} in {cwd} failed: {proc.stderr.strip()}")
+    return proc
+
+
+def _target_commit(target: Path) -> str:
+    proc = _git(target, "rev-parse", "HEAD", check=False)
+    return proc.stdout.strip() if proc.returncode == 0 else "unknown (not a git checkout)"
+
+
+# --------------------------------------------------------------------------- workspace
+
+@dataclass
+class Workspace:
+    root: Path
+
+    @property
+    def repo(self) -> Path:
+        return self.root / "repo"
+
+    @property
+    def audit(self) -> Path:
+        return self.repo / ".audit"
+
+    @property
+    def home(self) -> Path:
+        return self.root / "home"
+
+    @property
+    def scratch(self) -> Path:
+        return self.root / "scratch"
+
+    @property
+    def marker_path(self) -> Path:
+        return self.root / MARKER
+
+    def marker(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.marker_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise HarnessError(f"{self.root} has no {MARKER}, so control-ledger didn't create it; "
+                               f"run `control-ledger launch` and use the workspace it prints") from None
+        if data.get("tool") != TOOL:
+            raise HarnessError(f"{self.marker_path} wasn't written by control-ledger")
+        return data
+
+    @property
+    def evidence(self) -> Path:
+        return Path(self.marker()["evidence"])
+
+
+def _workspace(ns: argparse.Namespace) -> Workspace:
+    raw = ns.ws or os.environ.get(WS_ENV)
+    if not raw:
+        raise HarnessError(f"no workspace: pass --ws DIR or set {WS_ENV} to the path `control-ledger launch` printed")
+    ws = Workspace(Path(raw).resolve())
+    ws.marker()
+    return ws
+
+
+def _write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _launch(ns: argparse.Namespace) -> int:
+    target = Path(ns.target).resolve() if ns.target else SKILL_REPO
+    entry = target / "ci" / "run_ledger.py"
+    if not (target / "src" / "agent_ledger" / "cli.py").is_file() or not entry.is_file():
+        raise HarnessError(f"{target} isn't an agent-ledger checkout (no src/agent_ledger/cli.py or ci/run_ledger.py); "
+                           f"pass --target <agent-ledger checkout>")
+    parent = Path(os.path.realpath(ns.parent or tempfile.gettempdir()))
+    root = Path(tempfile.mkdtemp(prefix="verify-ledger-", dir=parent))
+    ws = Workspace(root)
+    evidence_root = Path(ns.evidence_root).resolve() if ns.evidence_root else SKILL_REPO / ".verify" / "ledger"
+    evidence = evidence_root / root.name
+    for d in (ws.repo, ws.home, ws.scratch, evidence):
+        d.mkdir(parents=True, exist_ok=True)
+    _git(ws.repo, "init", "-q", "-b", "main", home=ws.home)
+    # A project has history before its first run; seal reads HEAD, which an unborn branch lacks.
+    (ws.repo / "README.md").write_text("Throwaway repo made by control-ledger launch.\n", encoding="utf-8")
+    _git(ws.repo, "add", "README.md", home=ws.home)
+    _git(ws.repo, "commit", "-q", "-m", "verify-ledger: workspace", home=ws.home)
+    ws.audit.mkdir()
+    marker = {"tool": TOOL, "created": _now(), "workspace": str(root), "target": str(target),
+              "target_commit": _target_commit(target), "python": sys.executable,
+              "python_version": platform.python_version(), "evidence": str(evidence), "pid": os.getpid()}
+    _write_json(ws.marker_path, marker)
+    _write_json(evidence / "launch.json", marker)
+    if ns.json:
+        print(json.dumps(marker, indent=2, sort_keys=True))
+    else:
+        print(f"workspace {root}")
+        print(f"evidence  {evidence}")
+        print(f"target    {target} @ {marker['target_commit'][:12]}")
+        print(f"ready: export {WS_ENV}={root}")
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------- running ledger
+
+@dataclass
+class Ran:
+    argv: list[str]
+    exit: int
+    stdout: str
+    stderr: str
+    seconds: float
+
+
+def _ledger(ws: Workspace, args: list[str], *, stdin: str | None = None) -> Ran:
+    """Run the target's `ledger` as a user would: cwd is the workspace repo, so `.audit/` is found
+    from the nearest .git, and HOME is the workspace's, so no user policy leaks in."""
+    m = ws.marker()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "PYTHON"))}
+    env["HOME"] = str(ws.home)
+    argv = [m["python"], "-I", str(Path(m["target"]) / "ci" / "run_ledger.py"), *args]
+    start = time.monotonic()
+    try:
+        proc = subprocess.run(argv, cwd=ws.repo, capture_output=True, text=True, encoding="utf-8", env=env,
+                              input=stdin, timeout=LEDGER_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise HarnessError(f"ledger {' '.join(args[:2])} ran past {LEDGER_TIMEOUT_S} s") from None
+    return Ran(["ledger", *args], proc.returncode, proc.stdout, proc.stderr, round(time.monotonic() - start, 3))
+
+
+def _cli(ns: argparse.Namespace) -> int:
+    ws = _workspace(ns)
+    args = list(ns.args)
+    if args and args[0] == "--":
+        args = args[1:]
+    if not args:
+        raise HarnessError("nothing to run: `control-ledger cli -- <ledger args>`, such as `cli -- verify`")
+    ran = _ledger(ws, args)
+    folder = ws.evidence / "cli"
+    folder.mkdir(parents=True, exist_ok=True)
+    n = len(list(folder.glob("*.json"))) + 1
+    record = {"argv": ran.argv, "exit": ran.exit, "stdout": ran.stdout, "stderr": ran.stderr, "seconds": ran.seconds,
+              "ts": _now()}
+    _write_json(folder / f"{n:03d}.json", record)
+    if ns.json:
+        print(json.dumps(record, indent=2))
+    else:
+        sys.stdout.write(ran.stdout)
+        sys.stderr.write(ran.stderr)
+    return ran.exit
+
+
+# --------------------------------------------------------------------------- doctor
+
+def _doctor_checks(ws: Workspace) -> list[dict[str, Any]]:
+    m = ws.marker()
+    target = Path(m["target"])
+    checks: list[dict[str, Any]] = []
+
+    def add(name: str, ok: bool, detail: str) -> None:
+        checks.append({"check": name, "ok": bool(ok), "detail": detail})
+
+    add("python", tuple(map(int, m["python_version"].split(".")[:2])) >= MIN_PYTHON and Path(m["python"]).exists(),
+        f"{m['python']} ({m['python_version']})")
+    commit = _target_commit(target)
+    add("target", (target / "ci" / "run_ledger.py").is_file() and commit == m["target_commit"],
+        f"{target} @ {commit[:12]} (launched at {m['target_commit'][:12]})")
+    probe = subprocess.run([m["python"], "-I", "-c",
+                            "import sys; sys.path.insert(0, sys.argv[1]); import agent_ledger; "
+                            "print(agent_ledger.__file__); print(agent_ledger.__version__)",
+                            str(target / "src")], capture_output=True, text=True, timeout=60)
+    lines = probe.stdout.split()
+    loaded_from = lines[0] if lines else ""
+    add("code-under-test", probe.returncode == 0 and Path(loaded_from).resolve().is_relative_to(target / "src"),
+        f"agent_ledger {lines[1] if len(lines) > 1 else '?'} from {loaded_from or probe.stderr.strip()}")
+    ran = _ledger(ws, ["--version"])
+    add("ledger-runs", ran.exit == 0 and ran.stdout.startswith("ledger "), (ran.stdout or ran.stderr).strip())
+    top = _git(ws.repo, "rev-parse", "--show-toplevel", check=False)
+    own_root = top.returncode == 0 and Path(top.stdout.strip()).resolve() == ws.repo.resolve()
+    add("isolated-root", own_root and not ws.root.resolve().is_relative_to(target.resolve())
+        and not ws.root.resolve().is_relative_to(SKILL_REPO),
+        f"ledger's repo root is {top.stdout.strip() or top.stderr.strip()} (outside {target})")
+    add("isolated-home", ws.home.is_dir() and not (ws.home / ".agents" / "policy.yaml").exists(),
+        f"HOME={ws.home}; no user policy.yaml")
+    runs = sorted(p.name for p in (ws.audit / "runs").iterdir()) if (ws.audit / "runs").is_dir() else []
+    add("audit-dir", ws.audit.is_dir(), f"{ws.audit}: " + (f"{len(runs)} runs ({', '.join(runs)})" if runs else "empty"))
+    add("evidence-dir", ws.evidence.is_dir() and os.access(ws.evidence, os.W_OK), str(ws.evidence))
+    return checks
+
+
+def _doctor(ns: argparse.Namespace) -> int:
+    ws = _workspace(ns)
+    checks = _doctor_checks(ws)
+    ok = all(c["ok"] for c in checks)
+    _write_json(ws.evidence / "doctor.json", {"ok": ok, "checks": checks, "ts": _now()})
+    if ns.json:
+        print(json.dumps({"ok": ok, "checks": checks}, indent=2))
+    else:
+        for c in checks:
+            print(f"{'ok  ' if c['ok'] else 'FAIL'} {c['check']:<16} {c['detail']}")
+        print("doctor: ready to drive" if ok else "doctor: NOT ready; fix the FAIL lines or launch a fresh workspace")
+    return EXIT_OK if ok else EXIT_FAILED
+
+
+# --------------------------------------------------------------------------- drive
+
+def _fake(kind: str, i: int = 0) -> str:
+    # Built from parts so no token-shaped literal sits in the repo. Obviously fake, still matches.
+    if kind == "anthropic":
+        return "sk-" + "ant-" + "verifyFAKE" + "0" * 20
+    if kind == "github":
+        return "gh" + "p_" + "verifyFAKE" + "0" * 26
+    if kind == "url":
+        return "postgres://app:" + f"pw{i}x" + "@db/main"
+    raise ValueError(kind)
+
+
+@dataclass
+class Step:
+    name: str
+    ran: Ran | None = None
+    checks: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return all(c["ok"] for c in self.checks)
+
+    def record(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"step": self.name, "ok": self.ok, "checks": self.checks}
+        if self.ran is not None:
+            out.update(argv=self.ran.argv, exit=self.ran.exit, stdout=self.ran.stdout, stderr=self.ran.stderr,
+                       seconds=self.ran.seconds)
+        return out
+
+
+class StepFailed(Exception):
+    pass
+
+
+class Journey:
+    """One feature's drive: each step runs a user command and checks exit code and on-disk state.
+    The first failed step stops the feature; every step is written to the evidence as it runs."""
+
+    def __init__(self, ws: Workspace, feature: str):
+        self.ws, self.feature = ws, feature
+        self.folder = ws.evidence / feature
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.log = self.folder / "steps.jsonl"
+        self.log.write_text("", encoding="utf-8")
+        self.steps: list[Step] = []
+
+    def step(self, name: str, args: list[str] | None, *, exit: int | None = None,
+             checks: Callable[[Step], None] | None = None) -> Step:
+        s = Step(name)
+        self.steps.append(s)
+        if args is not None:
+            s.ran = self._run(args)
+            if exit is not None:
+                self.check(s, f"exit {exit}", s.ran.exit == exit, f"got exit {s.ran.exit}")
+        if checks is not None and s.ok:
+            checks(s)
+        with self.log.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(s.record(), sort_keys=True) + "\n")
+        if not s.ok:
+            raise StepFailed(name)
+        return s
+
+    def _run(self, args: list[str]) -> Ran:
+        return _ledger(self.ws, args)
+
+    @staticmethod
+    def check(s: Step, name: str, ok: bool, detail: str = "") -> None:
+        s.checks.append({"check": name, "ok": bool(ok), "detail": detail})
+
+    def ledger_lines(self, run_id: str) -> list[str]:
+        path = self.ws.audit / "runs" / run_id / "ledger.jsonl"
+        return path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+
+    def last_entry(self, run_id: str) -> dict[str, Any]:
+        lines = self.ledger_lines(run_id)
+        return json.loads(lines[-1]) if lines else {}
+
+    def init(self, slug: str) -> str:
+        found: dict[str, str] = {}
+
+        def parse(s: Step) -> None:
+            m = re.match(r"started ([0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+):", s.ran.stdout)
+            self.check(s, "prints the run id", m is not None, s.ran.stdout.strip())
+            if m:
+                found["run"] = m.group(1)
+                lines = self.ledger_lines(m.group(1))
+                self.check(s, "ledger.jsonl has the genesis entry", len(lines) == 1, f"{len(lines)} lines")
+        self.step(f"init {slug}", ["init", slug, "--actor", json.dumps(AGENT), "--why", f"verify-ledger drive: {slug}"],
+                  exit=0, checks=parse)
+        return found["run"]
+
+    def append(self, run: str, type_: str, summary: str, *, data: dict | None = None, evidence: list[str] = (),
+               exit: int = 0, name: str | None = None, checks: Callable[[Step], None] | None = None,
+               extra: list[str] = ()) -> Step:
+        args = ["append", "--run", run, "--actor", json.dumps(AGENT), "--type", type_, "--summary", summary,
+                "--why", "verify-ledger drive"]
+        for e in evidence:
+            args += ["--evidence", e]
+        if data is not None:
+            args += ["--data", json.dumps(data)]
+        return self.step(name or f"append {type_}", [*args, *extra], exit=exit, checks=checks)
+
+
+def feature_run_chain(j: Journey) -> None:
+    run = j.init("chain")
+    j.append(run, "decision", "Chose the repo sink", evidence=["README.md"],
+             checks=lambda s: j.check(s, "ledger.jsonl grew to 2 lines", len(j.ledger_lines(run)) == 2,
+                                      f"{len(j.ledger_lines(run))} lines"))
+
+    def shown(s: Step) -> None:
+        j.check(s, "table names the decision", "decision" in s.ran.stdout and "Chose the repo sink" in s.ran.stdout)
+        j.check(s, "footer says 2 entries, verified", f"{run}: 2 entries, verified" in s.ran.stdout)
+    j.step("show", ["show", run], exit=0, checks=shown)
+    folder = f".audit/runs/{run}"
+    j.step("verify run folder", ["verify", folder], exit=0,
+           checks=lambda s: j.check(s, "reports ok with 2 entries", s.ran.stdout.startswith(f"ok {run}: 2 entries")))
+    j.step("verify repo", ["verify"], exit=0)
+
+    path = j.ws.audit / "runs" / run / "ledger.jsonl"
+    original = path.read_bytes()
+    j.step("tamper: edit entry 1's summary by hand", None, checks=lambda s: (
+        path.write_bytes(original.replace(b"Chose the repo sink", b"Chose the s3 sink")),
+        j.check(s, "the file changed", path.read_bytes() != original)))
+
+    def broken(s: Step) -> None:
+        j.check(s, "names the run as FAILED", f"FAILED {run}" in s.ran.stdout, s.ran.stdout.strip()[-200:])
+        j.check(s, "points at line 2", "ledger.jsonl:2:" in s.ran.stdout)
+    j.step("verify catches the tamper", ["verify", folder], exit=1, checks=broken)
+    j.step("verify repo catches the tamper", ["verify"], exit=1)
+    before = path.read_bytes()
+    j.append(run, "decision", "This must not land", exit=1, name="append refuses a broken chain",
+             checks=lambda s: (j.check(s, "says it refuses", "refusing" in s.ran.stderr, s.ran.stderr.strip()),
+                               j.check(s, "ledger.jsonl unchanged", path.read_bytes() == before)))
+    j.step("restore the original bytes", None, checks=lambda s: (
+        path.write_bytes(original), j.check(s, "restored", path.read_bytes() == original)))
+    j.step("verify after restore", ["verify", folder], exit=0)
+
+
+def feature_redaction(j: Journey) -> None:
+    run = j.init("redaction")
+    key, tok = _fake("anthropic"), _fake("github")
+
+    def redacted(s: Step) -> None:
+        text = "\n".join(j.ledger_lines(run))
+        j.check(s, "fake keys are not in ledger.jsonl", key not in text and tok not in text)
+        j.check(s, "placeholders are", "[REDACTED:anthropic_key]" in text and "[REDACTED:github_token]" in text)
+    j.append(run, "lesson", f"Rotated {key} after it showed up in a log", data={"note": f"old token {tok}"},
+             name="append with secrets in summary and data", checks=redacted)
+    j.step("verify the redacted chain", ["verify", f".audit/runs/{run}"], exit=0)
+    j.step("scan is clean", ["scan"], exit=0, checks=lambda s: j.check(s, "says ok", s.ran.stdout.startswith("ok:")))
+    planted = j.ws.audit / "runs" / run / "planted-notes.md"
+    j.step("plant a secret in a file under .audit by hand", None, checks=lambda s: (
+        planted.write_text(f"debug: GITHUB_TOKEN={tok}\n", encoding="utf-8"),
+        j.check(s, "planted", planted.is_file())))
+
+    def found(s: Step) -> None:
+        j.check(s, "names the planted file", "planted-notes.md" in s.ran.stdout, s.ran.stdout.strip())
+        j.check(s, "says FAILED", "FAILED" in s.ran.stdout)
+    j.step("scan finds the planted secret", ["scan"], exit=1, checks=found)
+    j.step("remove the planted file", None, checks=lambda s: (
+        planted.unlink(), j.check(s, "removed", not planted.exists())))
+    j.step("scan is clean again", ["scan"], exit=0)
+
+
+def feature_session_archive(j: Journey) -> None:
+    run = j.init("session")
+    key = _fake("anthropic")
+    transcript = j.ws.scratch / "verify-session.jsonl"
+    lines = [json.dumps({"type": "user", "message": {"content": "deploy the fix"}}),
+             *(json.dumps({"type": "tool_result", "content": f"psql {_fake('url', i)}"}) for i in range(12)),
+             json.dumps({"type": "tool_result", "content": f"export ANTHROPIC_API_KEY={key}"})]
+    j.step("write a transcript with 12 URL passwords and an API key", None, checks=lambda s: (
+        transcript.write_text("\n".join(lines) + "\n", encoding="utf-8"),
+        j.check(s, "written", transcript.is_file())))
+    archive = j.ws.audit / "runs" / run / "sessions" / "verify-session.jsonl.gz"
+    args = ["session", "add", str(transcript), "--run", run, "--actor", json.dumps(AGENT)]
+
+    def archived(s: Step) -> None:
+        j.check(s, "says archived", s.ran.stdout.startswith("archived verify-session:"), s.ran.stdout.strip())
+        j.check(s, "archive file exists", archive.is_file(), str(archive))
+        if not archive.is_file():
+            return
+        body = gzip.decompress(archive.read_bytes()).decode("utf-8")
+        j.check(s, "no URL password or key in the archive",
+                not any(f"pw{i}x" in body for i in range(12)) and key not in body)
+        j.check(s, "12 url_password placeholders", body.count("[REDACTED:url_password]") == 12,
+                f"{body.count('[REDACTED:url_password]')} found")
+        entry = j.last_entry(run)
+        d = entry.get("data", {})
+        j.check(s, "session entry records archived, path and both hashes",
+                entry.get("type") == "session" and d.get("archived") is True
+                and d.get("path") == f".audit/runs/{run}/sessions/verify-session.jsonl.gz"
+                and bool(d.get("raw_sha256")) and bool(d.get("redacted_sha256")), json.dumps(d)[:300])
+        j.check(s, "redacted_sha256 matches the archived text",
+                d.get("redacted_sha256") == _sha256(body.encode("utf-8")))
+    j.step("session add", args, exit=0, checks=archived)
+    before = len(j.ledger_lines(run))
+    j.step("session add again is a no-op", args, exit=0, checks=lambda s: (
+        j.check(s, "says unchanged", s.ran.stdout.startswith("unchanged:"), s.ran.stdout.strip()),
+        j.check(s, "no new entry", len(j.ledger_lines(run)) == before)))
+    j.step("verify the run", ["verify", f".audit/runs/{run}"], exit=0)
+    j.step("scan finds no secret in the archive", ["scan"], exit=0)
+
+
+def _receipt(criterion: str, verdict: str, exit_code: int, commit: str) -> dict[str, Any]:
+    return {"verdict": verdict, "receipt": {"criterion": criterion, "spec": "docs/phases/verify.md",
+                                            "spec_sha256": "a" * 64, "probe": f"probe-{criterion.lower()}",
+                                            "commit": commit, "exit": exit_code}}
+
+
+def feature_receipts(j: Journey) -> None:
+    run = j.init("receipts")
+    commit = "c" * 40
+    j.step("receipts on a run with none", ["receipts", run], exit=0,
+           checks=lambda s: j.check(s, "says no receipts", s.ran.stdout.strip() == f"{run}: no receipts",
+                                    s.ran.stdout.strip()))
+    j.append(run, "verification", "P10-C1 probe passed", data=_receipt("P10-C1", "VERIFIED", 0, commit),
+             evidence=["evidence/p10.txt"], name="append receipt P10-C1 VERIFIED")
+    j.append(run, "verification", "P2-C1 probe failed", data=_receipt("P2-C1", "NOT VERIFIED", 1, commit),
+             name="append receipt P2-C1 NOT VERIFIED")
+    j.append(run, "verification", "P2-C1 probe passed", data=_receipt("P2-C1", "VERIFIED", 0, commit),
+             name="append receipt P2-C1 VERIFIED")
+    before = len(j.ledger_lines(run))
+    j.append(run, "verification", "claims VERIFIED with a failing exit",
+             data=_receipt("P2-C2", "VERIFIED", 1, commit), exit=2, name="append refuses a malformed receipt",
+             checks=lambda s: (j.check(s, "says why", "NOT VERIFIED" in s.ran.stderr, s.ran.stderr.strip()),
+                               j.check(s, "ledger.jsonl unchanged", len(j.ledger_lines(run)) == before)))
+
+    def table(s: Step) -> None:
+        lines = [l for l in s.ran.stdout.splitlines() if l.strip()]
+        j.check(s, "stdout is only a Markdown table", bool(lines) and all(l.startswith("|") for l in lines),
+                s.ran.stdout)
+        rows = [l for l in lines[2:]]
+        crit = [r.split("|")[1].strip() for r in rows]
+        j.check(s, "one row per criterion, in natural order (P2 before P10)", crit == ["P2-C1", "P10-C1"], str(crit))
+        if crit == ["P2-C1", "P10-C1"]:
+            j.check(s, "P2-C1 shows its latest verdict and 1 earlier",
+                    "| VERIFIED |" in rows[0] and "1 earlier" in rows[0], rows[0])
+            j.check(s, "P10-C1 shows its evidence pointer", "evidence/p10.txt" in rows[1], rows[1])
+    j.step("receipts table", ["receipts", run], exit=0, checks=table)
+
+
+def feature_seal(j: Journey) -> None:
+    run = j.init("seal")
+    j.append(run, "state", "Unit 1 merged")
+    index = j.ws.audit / "INDEX.jsonl"
+    j.step("seal refuses an uncommitted ledger", ["seal", run, "--actor", json.dumps(AGENT)], exit=2,
+           checks=lambda s: (j.check(s, "says commit first", "commit the ledger" in s.ran.stderr, s.ran.stderr.strip()),
+                             j.check(s, "no INDEX.jsonl", not index.exists())))
+    j.step("commit .audit with git", None, checks=lambda s: (
+        _git(j.ws.repo, "add", "-A", ".audit", home=j.ws.home),
+        _git(j.ws.repo, "commit", "-q", "-m", "verify-ledger: run before seal", home=j.ws.home),
+        j.check(s, "committed", True)))
+    head = _git(j.ws.repo, "rev-parse", "HEAD", home=j.ws.home).stdout.strip()
+
+    def sealed(s: Step) -> None:
+        j.check(s, "says sealed", s.ran.stdout.startswith(f"sealed {run}"), s.ran.stdout.strip())
+        entry = j.last_entry(run)
+        j.check(s, "last entry is a seal naming HEAD",
+                entry.get("type") == "seal" and entry.get("data", {}).get("commit") == head, json.dumps(entry)[:300])
+        idx = index.read_text(encoding="utf-8").splitlines() if index.is_file() else []
+        j.check(s, "INDEX.jsonl has one line for the run", len(idx) == 1 and run in idx[0], f"{len(idx)} lines")
+    j.step("seal", ["seal", run, "--actor", json.dumps(AGENT)], exit=0, checks=sealed)
+    j.step("seal again does nothing", ["seal", run, "--actor", json.dumps(AGENT)], exit=0,
+           checks=lambda s: j.check(s, "says nothing to do", "nothing to do" in s.ran.stdout, s.ran.stdout.strip()))
+    j.append(run, "state", "After the seal", exit=2, name="append refuses a sealed run",
+             checks=lambda s: j.check(s, "says sealed", "sealed" in s.ran.stderr, s.ran.stderr.strip()))
+    j.step("commit the seal with git", None, checks=lambda s: (
+        _git(j.ws.repo, "add", "-A", ".audit", home=j.ws.home),
+        _git(j.ws.repo, "commit", "-q", "-m", "verify-ledger: seal", home=j.ws.home),
+        j.check(s, "committed", True)))
+    j.step("verify repo counts the seal", ["verify"], exit=0,
+           checks=lambda s: j.check(s, "1 sealed, 1 indexed", "1 sealed, 1 indexed" in s.ran.stdout,
+                                    s.ran.stdout.strip()))
+    j.step("verify --base HEAD", ["verify", "--base", "HEAD"], exit=0)
+
+
+FEATURES: dict[str, tuple[Callable[[Journey], None], str]] = {
+    "run-chain": (feature_run_chain, "init, append, show, verify; a hand edit is caught and appends refuse"),
+    "redaction": (feature_redaction, "secrets are redacted on append; scan finds a planted one"),
+    "session-archive": (feature_session_archive, "session add archives a redacted transcript and records both hashes"),
+    "receipts": (feature_receipts, "verification receipts print as a Markdown table, latest per criterion"),
+    "seal": (feature_seal, "seal anchors a committed run in INDEX.jsonl; verify counts it"),
+}
+
+
+def _drive_one(ws: Workspace, name: str) -> dict[str, Any]:
+    fn, _ = FEATURES[name]
+    j = Journey(ws, name)
+    start = time.monotonic()
+    error = None
+    try:
+        fn(j)
+    except StepFailed:
+        pass
+    except HarnessError as e:
+        error = str(e)
+    failed = next((s for s in j.steps if not s.ok), None)
+    result = {"feature": name, "ok": failed is None and error is None, "steps": len(j.steps),
+              "failed_step": failed.name if failed else None,
+              "failed_checks": [c for c in failed.checks if not c["ok"]] if failed else [],
+              "harness_error": error, "seconds": round(time.monotonic() - start, 3),
+              "evidence": str(j.log)}
+    _write_json(j.folder / "result.json", result)
+    return result
+
+
+def _snapshot_to(ws: Workspace, dest: Path) -> int:
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(ws.audit, dest / ".audit", symlinks=True)
+    manifest = []
+    for p in sorted((dest / ".audit").rglob("*")):
+        if p.is_file():
+            manifest.append(f"{_sha256(p.read_bytes())}  {p.relative_to(dest).as_posix()}")
+    (dest / "MANIFEST.sha256").write_text("\n".join(manifest) + ("\n" if manifest else ""), encoding="utf-8")
+    return len(manifest)
+
+
+def _drive(ns: argparse.Namespace) -> int:
+    ws = _workspace(ns)
+    names = list(FEATURES) if ns.feature == "all" else [ns.feature]
+    runs = ws.audit / "runs"
+    if ns.feature == "all" and any(ws.audit.iterdir()):
+        raise HarnessError(f"{ws.audit} isn't empty; `drive all` starts from an empty .audit/. "
+                           f"Run cleanup, then launch a fresh workspace")
+    for n in names:
+        slug = {"run-chain": "chain", "session-archive": "session"}.get(n, n)
+        if runs.is_dir() and any(p.name.endswith(f"-{slug}") for p in runs.iterdir()):
+            raise HarnessError(f"{n} already ran in this workspace (.audit/runs/*-{slug} exists); launch a fresh one")
+    results = []
+    for n in names:
+        r = _drive_one(ws, n)
+        results.append(r)
+        if not ns.json:
+            mark = "PASS" if r["ok"] else "FAIL"
+            print(f"{mark} {n:<16} {r['steps']} steps, {r['seconds']:.2f}s")
+            if not r["ok"]:
+                print(f"     failed step: {r['failed_step']}")
+                for c in r["failed_checks"]:
+                    print(f"     - {c['check']}: {c['detail'][:300]}")
+                if r["harness_error"]:
+                    print(f"     harness error: {r['harness_error']}")
+    files = _snapshot_to(ws, ws.evidence / "audit-snapshot")
+    ok = all(r["ok"] for r in results)
+    harness = any(r["harness_error"] for r in results)
+    summary = {"ok": ok, "target": ws.marker()["target"], "target_commit": ws.marker()["target_commit"],
+               "features": results, "snapshot_files": files, "ts": _now()}
+    _write_json(ws.evidence / f"drive-{ns.feature}.json", summary)
+    if ns.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"{'PASSED' if ok else 'FAILED'}: {sum(r['ok'] for r in results)}/{len(results)} features; "
+              f"evidence in {ws.evidence}")
+    return EXIT_OK if ok else (EXIT_HARNESS if harness else EXIT_FAILED)
+
+
+def _snapshot(ns: argparse.Namespace) -> int:
+    ws = _workspace(ns)
+    dest = ws.evidence / (ns.name or "audit-snapshot")
+    n = _snapshot_to(ws, dest)
+    print(f"copied {n} files from {ws.audit} to {dest}/.audit; hashes in {dest}/MANIFEST.sha256")
+    return EXIT_OK
+
+
+def _cleanup(ns: argparse.Namespace) -> int:
+    ws = _workspace(ns)
+    m = ws.marker()
+    evidence = Path(m["evidence"])
+    if evidence.resolve().is_relative_to(ws.root.resolve()):
+        raise HarnessError(f"evidence {evidence} is inside the workspace; refusing to delete it")
+    if ns.dry_run:
+        print(f"would remove {ws.root} (workspace created by control-ledger at {m['created']}); "
+              f"would keep {evidence}")
+        return EXIT_OK
+    shutil.rmtree(ws.root)
+    _write_json(evidence / "cleanup.json", {"removed": str(ws.root), "ts": _now()})
+    print(f"removed {ws.root}; evidence kept in {evidence}")
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------- parser
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="control-ledger",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Drive the real agent-ledger `ledger` CLI in a throwaway workspace and keep the evidence.",
+        epilog="Typical run:\n"
+               "  control-ledger launch                 # prints the workspace; export VERIFY_LEDGER_WS=<it>\n"
+               "  control-ledger doctor                 # every line ok\n"
+               "  control-ledger drive all              # or one feature: run-chain, redaction, session-archive, receipts, seal\n"
+               "  control-ledger cleanup                # removes the workspace, keeps the evidence\n"
+               "Exit codes: 0 pass, 1 a check failed, 2 the harness couldn't run (bad workspace, missing target).")
+    sub = p.add_subparsers(dest="command", metavar="COMMAND", required=True)
+
+    def ws_args(s: argparse.ArgumentParser) -> None:
+        s.add_argument("--ws", metavar="DIR", default=None,
+                       help=f"the workspace `launch` printed (default: ${WS_ENV})")
+        s.add_argument("--json", action="store_true", help="print JSON instead of text")
+
+    s = sub.add_parser("launch", formatter_class=argparse.RawDescriptionHelpFormatter,
+                       help="create a fresh workspace: its own git repo, an empty .audit/, its own HOME",
+                       description="Create a throwaway workspace under the temp dir: repo/ (git init, empty .audit/), "
+                                   "home/ (HOME for ledger, so ~/.agents/policy.yaml can't leak in) and scratch/. "
+                                   "Evidence goes to <evidence-root>/<workspace name>/ and survives cleanup.",
+                       epilog="Example:\n  control-ledger launch\n"
+                              "  control-ledger launch --target /tmp/agent-ledger-at-e101dc0 --evidence-root /tmp/ev")
+    s.add_argument("--target", metavar="CHECKOUT", default=None,
+                   help=f"the agent-ledger checkout whose code runs (default: the one holding this script, {SKILL_REPO})")
+    s.add_argument("--evidence-root", metavar="DIR", default=None,
+                   help=f"where evidence folders go (default: {SKILL_REPO / '.verify' / 'ledger'}, git-ignored)")
+    s.add_argument("--parent", metavar="DIR", default=None, help="where to create the workspace (default: the temp dir)")
+    s.add_argument("--json", action="store_true", help="print the workspace record as JSON")
+    s.set_defaults(func=_launch)
+
+    s = sub.add_parser("doctor", help="read-only: is this workspace worth driving?",
+                       description="Check the interpreter, the code under test (path and commit), that ledger runs, "
+                                   "that the workspace is its own git root with its own HOME, and the evidence folder. "
+                                   "Exit 0 when every line is ok.",
+                       epilog="Example: control-ledger doctor --json")
+    ws_args(s)
+    s.set_defaults(func=_doctor)
+
+    s = sub.add_parser("drive", formatter_class=argparse.RawDescriptionHelpFormatter,
+                       help="run a mapped feature's journey (or all of them) and record every step",
+                       description="Run the journey for a feature from features/<name>.md. Each step runs the real "
+                                   "ledger command, checks the exit code and the files on disk, and is appended to "
+                                   "<evidence>/<feature>/steps.jsonl. `all` needs an empty .audit/.",
+                       epilog="Features:\n" + "\n".join(f"  {k:<16} {v[1]}" for k, v in FEATURES.items())
+                              + "\nExample: control-ledger drive receipts")
+    s.add_argument("feature", choices=["all", *FEATURES], help="a feature name, or all")
+    ws_args(s)
+    s.set_defaults(func=_drive)
+
+    s = sub.add_parser("cli", help="run one ledger command in the workspace and record it",
+                       description="Run `ledger <args>` from the target checkout with cwd in the workspace repo and "
+                                   "HOME isolated. Prints its output, exits with its exit code, and records argv, "
+                                   "stdout, stderr and exit in <evidence>/cli/NNN.json.",
+                       epilog="Example: control-ledger cli -- show 2026-11-18-chain")
+    ws_args(s)
+    s.add_argument("args", nargs=argparse.REMAINDER, help="-- then the ledger arguments")
+    s.set_defaults(func=_cli)
+
+    s = sub.add_parser("snapshot", help="copy the workspace's .audit/ into the evidence with a sha256 manifest",
+                       description="Copy .audit/ to <evidence>/<name>/.audit and write MANIFEST.sha256.",
+                       epilog="Example: control-ledger snapshot --name after-seal")
+    ws_args(s)
+    s.add_argument("--name", default=None, help="the snapshot folder name (default: audit-snapshot)")
+    s.set_defaults(func=_snapshot)
+
+    s = sub.add_parser("cleanup", help="remove the workspace this tool created; keep the evidence",
+                       description="Remove the workspace folder (only one with control-ledger.json in it). The "
+                                   "evidence folder is never touched.",
+                       epilog="Example: control-ledger cleanup --dry-run")
+    ws_args(s)
+    s.add_argument("--dry-run", action="store_true", help="say what would be removed and remove nothing")
+    s.set_defaults(func=_cleanup)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    ns = build_parser().parse_args(argv)
+    try:
+        return ns.func(ns)
+    except HarnessError as e:
+        print(f"control-ledger {ns.command}: {e}", file=sys.stderr)
+        return EXIT_HARNESS
+
+
+if __name__ == "__main__":
+    sys.exit(main())
