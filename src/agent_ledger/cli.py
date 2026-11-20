@@ -1,7 +1,7 @@
 """The `ledger` command line.
 
 Every planned subcommand is declared so `--help` shows the whole surface. Commands in HANDLERS
-work; the rest exit with code 2 and point at the spec that defines them (M0 charter,
+work; one that isn't there exits with code 2 and points at the spec that defines it (M0 charter,
 .audit/runs/2026-10-18-m0-foundation/charter.md).
 """
 from __future__ import annotations
@@ -18,6 +18,7 @@ from ._canon import CanonError, parse_value
 from .charter import (CHARTER_FILE, CharterError, approval_status, approve_charter, check_charter,
                       new_charter, read_charter)
 from .entry import Actor, EntryError, EntryType, HumanActor, _actor_from_wire
+from .import_tsv import DEFAULT_SLUG, DEFAULT_WHY, import_tsv, source_path
 from .redact import PolicyError, Redactor, base_policy_patterns, policy_patterns
 from .receipt import latest_receipts, render_table
 from ._text import visible
@@ -549,6 +550,44 @@ def _scan(ns: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _add_import_tsv_args(p: argparse.ArgumentParser) -> None:
+    p.description = ("Copy an old show-me-your-work decisions.tsv into a new run: one `decision` entry per "
+                     "record, each marked data.imported. The columns are found by the header's names: ts or "
+                     "when, decision or what, why, and optionally evidence, result and phase. One record "
+                     "that can't be an entry means nothing is written. Exit 0 imported, 2 not imported.")
+    p.add_argument("file", type=Path, metavar="FILE", help="the decisions.tsv to import (UTF-8, tab-separated)")
+    p.add_argument("--actor", type=_actor, required=True, help="who is importing, as S2 JSON; " + ACTOR_HELP)
+    p.add_argument("--record-actor", type=_actor, required=True,
+                   help="who wrote the records, as S2 JSON: the imported entries' actor. The file names "
+                        "nobody, so say it here; write `unknown` for a part nobody knows, such as the session")
+    p.add_argument("--slug", default=DEFAULT_SLUG,
+                   help=f"the new run's slug; the run id is <date>-<slug> (default: {DEFAULT_SLUG})")
+    p.add_argument("--date", type=_day, default=None,
+                   help="the run id's date: the day of the import, not of the records (default: today in UTC)")
+    p.add_argument("--why", default=DEFAULT_WHY, help="one line: why the trail is imported")
+    _add_redact_arg(p)
+    _add_root_arg(p)
+
+
+def _import_tsv(ns: argparse.Namespace) -> int:
+    def body() -> int:
+        root = _root(ns)
+        sink = repo_sink(root)
+        run_id = run_id_for(ns.slug, ns.date or utc_now().date())
+        raw = ns.file.read_bytes()  # before the path is resolved: an unreadable file fails here, as an OSError
+        path = source_path(ns.file, root)
+        done = import_tsv(sink, run_id, raw, path, actor=ns.actor,
+                          record_actor=ns.record_actor, why=ns.why, redactor=_redactor(ns))
+        head = done.entries[-1]
+        print(f"imported {len(done.entries) - 1} records from {path} into {run_id}: "
+              f"{sink.run_dir(run_id) / 'ledger.jsonl'} head seq {head.seq} {head.hash}")
+        for line, counts in done.redactions:
+            where = f"on line {line}" if line else "in --why"
+            print(f"redacted {where}: {', '.join(f'{k} {v}' for k, v in sorted(counts.items()))}")
+        return EXIT_OK
+    return _guard("import-tsv", ns, body)
+
+
 # subcommand -> (add its arguments, run it). A command is implemented iff it is here.
 HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[argparse.Namespace], int]]] = {
     "init": (_add_init_args, _init),
@@ -560,6 +599,7 @@ HANDLERS: dict[str, tuple[Callable[[argparse.ArgumentParser], None], Callable[[a
     "seal": (_add_seal_args, _seal),
     "spend": (_add_spend_args, _spend),
     "charter": (_add_charter_args, _charter),
+    "import-tsv": (_add_import_tsv_args, _import_tsv),
     "scan": (_add_scan_args, _scan),
 }
 

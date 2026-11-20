@@ -89,7 +89,7 @@ Options: `--target <checkout>` runs another agent-ledger checkout's code (use th
 
 For a command the map doesn't cover, use `control-ledger cli -- <ledger args>`, for example `$C cli -- show <run-id>` or `$C cli -- verify`. It runs that one command in the workspace, prints its output, exits with its code, and records it in `<evidence>/cli/NNN.json`. Run ids come from `init`'s output (`started <run-id>: ...`) or `$C doctor` (the `audit-dir` line).
 
-Not mapped yet: `charter new|check|approve`, `spend`, `verify --base` against a real base branch, and the `ledger-verify` Action. Drive them with `cli` and add a feature file when one becomes routine.
+Not mapped yet: `charter new|check|approve`, `spend`, `import-tsv`, `verify --base` against a real base branch, and the `ledger-verify` Action. Drive them with `cli` and add a feature file when one becomes routine.
 
 ## Evidence
 

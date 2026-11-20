@@ -49,4 +49,4 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Receipts](./receipts.md): verification receipts and the `receipts` table.
 - [Seal](./seal.md): `seal`, `INDEX.jsonl`, and verify's seal count.
 
-Not mapped yet: `charter new|check|approve`, `spend`, and `verify --base` against a branch with real history.
+Not mapped yet: `charter new|check|approve`, `spend`, `import-tsv`, and `verify --base` against a branch with real history.

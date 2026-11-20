@@ -175,7 +175,7 @@ The base check covers every `ledger.jsonl` under `.audit/runs` and `.audit/INDEX
 | `ledger spend <run-id>` | Adds up the run's `spend` entries and prints used, limit and what is left for the charter's `budget.usd` and `budget.tokens`, after verifying the run. Exit 0 under both limits, 1 at or over either (or the run fails verify), 2 unreadable (see Spend entries) |
 | `ledger receipts <run-id>` | Prints the run's receipts as a Markdown table, one row per criterion with its latest verdict, after verifying the run (see Receipt entries). Exit 0 printed, 1 the run fails verify, 2 unreadable |
 | `ledger charter ...` | Charter commands from S1 |
-| `ledger import-tsv <file>` | Converts an old `decisions.tsv` trail into a run |
+| `ledger import-tsv <file> --actor A --record-actor A [--slug S] [--date D] [--why W] [--redact-pattern P]...` | Copies an old `decisions.tsv` trail into a new run, one imported `decision` entry per record, written whole or not at all (see Migration). Exit 0 imported, 2 not imported |
 
 `--actor` is the S2 actor as JSON. It is required on every write: the CLI never guesses who is acting, so a subagent can't inherit its parent's identity by accident. The run folder is `.audit/runs/<run-id>` under `--root`, which defaults to the nearest folder holding `.git`.
 
@@ -245,6 +245,42 @@ Never add a step that runs code from `checked` (a build, a test, a script): unde
 Existing `decisions.tsv` trails stay readable. `ledger import-tsv` converts one into a run, marked as imported, with chaining starting at import.
 
 An imported entry is marked by `data.imported`, an object with `source` (where the record was, such as `bootstrap-notes.md#3`), `source_ts` (the time the record gives, in `ts` form) and `by` (the id of the actor who imported it). Its `ts` is when it was chained, never the earlier time, so `ts` always means "written to the ledger at". Its `actor` is the record's original actor, which `data.imported.by` qualifies: an imported human approval was typed in by the importer, not signed by the human. `ledger show` tags these entries `[imported]`. This is a convention inside `data`, not a format change.
+
+### `ledger import-tsv`
+
+```text
+ledger import-tsv <file> --actor A --record-actor A [--slug S] [--date D] [--why W] [--redact-pattern P]... [--root R]
+```
+
+It reads one tab-separated file and writes one new run. It never adds to a ledger that exists.
+
+- **The run.** The run id is `<date>-<slug>`. The date is the day of the import, not of the records, and defaults to today in UTC. The slug defaults to `imported-decisions`. A run that already has a ledger is refused. As with `ledger init`, a run folder that holds only a charter is used.
+- **The first entry** is the importer's own `state` entry, as `ledger init` writes it, not an imported one. Its `data` is `{"state": "started", "source": {"path", "sha256", "rows"}}`: the file, the SHA-256 of its bytes, and how many records it held.
+- **The records.** Each record becomes one `decision` entry, in file order, marked `data.imported`. `source` is `<path>#<line>`, where the line is the record's line number in the file and the header is line 1. `by` is the id of `--actor`.
+- **The path** in `source` is the file's path inside the repo, or only its name when the file is outside the repo. An entry never carries a home folder.
+- **Two actors.** `--actor` is who runs the import. `--record-actor` is who wrote the records, and it is the imported entries' `actor`. A `decisions.tsv` has no actor column, and the CLI never guesses who acted, so the flag is required. Where nobody knows a part of the identity, such as the session or the model, write `unknown` there. One file has one record actor. A trail written by several goes in as one file per actor.
+
+Columns are found by the header's names, in any order:
+
+| Column | Becomes | Required |
+|---|---|---|
+| `ts` or `when` | `data.imported.source_ts` | yes |
+| `decision` or `what` | `summary` | yes |
+| `why` | `why` | yes |
+| `evidence` | one `evidence` pointer holding the whole cell. An empty cell gives no pointer | no |
+| `result` | `data.result`, left out when the cell is empty | no |
+| `phase` | `data.phase`, left out when the cell is empty | no |
+
+show-me-your-work's `log.sh` wrote `ts phase decision why evidence result`. Trails kept by hand use `when what why evidence result`. A header that names any other column, names one field twice, or lacks a required one is refused. The message gives the cell's position, not its text: when the header is missing, line 1 is a record.
+
+- **Lines and cells.** The file is UTF-8, and a byte order mark is dropped. Lines end in LF or CRLF, and cells are split on tabs. Nothing is quoted, so a `"` is ordinary text. `log.sh` put a `'` before a cell that starts with `=`, `+`, `-` or `@`, so a spreadsheet wouldn't run it as a formula. When the header is exactly `log.sh`'s six columns in its order, the import takes that `'` off. In any other file a leading `'` is the writer's own and stays. A later line that repeats the header exactly is skipped: `log.sh` could write its header again on a network mount.
+- **The evidence cell is not split.** Old trails separate pointers with semicolons, commas or prose, and no rule splits them all correctly.
+- **The time.** The cell is a date (`2026-10-24`), or a date and time to the minute or the second (`2026-10-26T10:34`, `2026-11-08T19:51:55`), with or without a final `Z`. A part the record leaves out is zero, so `2026-10-24` gives a `source_ts` of `2026-10-24T00:00:00Z`. The digits are kept as written. A record names no zone, so it is read as UTC, which is what `log.sh` wrote. When the cell is not already in `ts` form, `data.when` keeps it as written, so a reader can tell a date from midnight. A time with an offset, or any other text, is a malformed record.
+- **A malformed record stops the import.** A record with the wrong number of cells, a time that can't be read, an empty summary or why, or text that format v1 refuses (a control character or a Unicode line break in `summary`, `why` or `evidence`) is a problem, and so is an empty line. The command lists every problem by line number, writes nothing, and exits 2. The ledger file is written in one step, so it appears whole or not at all. A ledger only grows, so half an imported trail could not be taken back after a merge. Fix a copy of the file and import the copy.
+- **Redaction.** Every cell goes through the redaction and the write-time checks that `ledger append` uses, with the same patterns (built-in, policy and `--redact-pattern`). A redacted cell is imported with its `[REDACTED:<pattern>]` placeholder, and the command prints the line number and the pattern name, never the text. A record whose redaction can't be confirmed is a problem like any other, so nothing is written. The import is also refused when a pattern matches what the run needs to name its source: the file's path or `sha256` in the first entry, or a record's `data.imported`. A redacted hash could not stop a second import, and a redacted path would cut the line number from `source`.
+- **A file is imported once.** The import is refused when the first entry of any run in the repo records the same `sha256`. A copy with any byte changed is a different file. A run that fails verify isn't consulted.
+
+The run is then an ordinary open run: commit it, and `ledger seal` it when nothing more will be added.
 
 ## Acceptance criteria
 
