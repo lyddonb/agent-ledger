@@ -134,6 +134,8 @@ def redact_fields(redactor: Redactor, fields: Mapping[str, Any]) -> tuple[dict[s
         redactor.confirm(json.dumps(clean, ensure_ascii=False))
     except Unconfirmed as e:
         raise RedactionRefused(str(e)) from None
+    except RecursionError:  # brackets nested past what the redactor can walk
+        raise RedactionRefused("the text is nested too deeply to check for secrets") from None
     return clean, counts
 
 
