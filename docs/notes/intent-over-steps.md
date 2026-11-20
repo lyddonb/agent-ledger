@@ -10,14 +10,14 @@ We are not dropping AGENTS.md or CLAUDE.md. The useful idea is what goes in them
 |---|---|---|
 | Constitution (philosophy, hard rules) | `principles` plugin, beau-mode | In place |
 | Preferences (outcomes, not steps) | agentfiles profile `instructions:` | In place; audit wording (agentfiles IDEAS) |
-| TELOS (life goals at the top) | `docs/VISION.md` per product | Partial. Goal measure, lever and first move: agent-kit R24. Life goals stay in the PKM vault (agent-kit IDEAS) |
+| TELOS (life goals at the top) | `docs/VISION.md` per product, whose goals table has Measure, Lever and First move | **Done in bstack 0.22.0** for product goals (was agent-kit R24). Life goals stay in the PKM vault (agent-kit IDEAS) |
 | Ideal State Artifact, three levels, criteria with probes, anti-criteria, outlives every run | Phase specs | **Done in bstack 0.11.0** |
 | Ask open questions when direction is fuzzy | Product phase playbook, `grilling` | In place |
 | Hooks block code changes when the spec wasn't read or updated | Nothing | agent-kit R22 (CI first, then a hook) |
 | The Algorithm, effort scales with the task | beau-mode playbooks, tiers 1 to 3 | In place |
 | Hardest thinking to the smartest model | `roles.yaml` (`judgment`, `code`) | In place |
 | The builder never grades its own work; another vendor reviews | `interrogate`, `arena`, cross-model reviewers | In place |
-| A bug that survives two fixes gets a fresh diagnosis | Not stated in the Bug fix playbook | agent-kit R26 |
+| A bug that survives two fixes gets a fresh diagnosis | Bug fix playbook: two fixes that didn't hold go back to the symptom with `root-cause`; three failed rounds on one check go to a person | Shipped in bstack 0.21.0. Not yet seen on a real case: agent-kit R26 |
 | One eval system; every criterion maps to an eval; receipts | `verify-work`, verify-APP skills, qualitydirector, ledger entries | Receipts per criterion: agent-kit R21 and "Criterion receipts" here |
 | Test in a real browser; "should work" is banned | `verify-work`, `create-verification-skill` | In place; a lint for unverified claims is in agent-kit IDEAS |
 | ERRATA: log complaints; a rejected-but-passing result names the missing check | `reflect`, `correct`; the Product phase playbook now does this inside one spec | Cross-session log: agent-kit R23 and "`rejection` entries" here |
