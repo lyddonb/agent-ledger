@@ -14,7 +14,7 @@ import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator, Protocol
+from typing import Iterator, Protocol, Sequence
 
 from ._canon import show
 from .entry import ChainHead, Entry, _check_run_id, encode_line
@@ -148,11 +148,15 @@ class RepoSink:
                 raise LedgerError(f"{folder} is a symlink; the ledger only writes through real folders")
         return run_dir / LEDGER_FILE
 
-    def create(self, first: Entry) -> None:
-        """Start a run's ledger with its first entry. The run folder may exist (a charter is
-        often written first); the ledger may not. Atomic: the file appears whole or not at all."""
+    def create(self, first: Entry, rest: Sequence[Entry] = ()) -> None:
+        """Start a run's ledger with its first entry, and any entries chained after it (an
+        import writes a whole run at once). The run folder may exist (a charter is often
+        written first); the ledger may not. Atomic: the file appears whole or not at all."""
         if first.seq != 1:
             raise ValueError(f"a ledger starts at seq 1, not {first.seq}")
+        lines = b"".join(encode_line(e) for e in (first, *rest))
+        if rest:
+            _verified(first.run_id, lines)  # a chain that doesn't link never reaches the disk
         self._ledger(first.run_id)
         self.run_dir(first.run_id).mkdir(parents=True, exist_ok=True)
         path = self._ledger(first.run_id)  # again: mkdir may have made the folders just now
@@ -160,7 +164,7 @@ class RepoSink:
         fd, tmp = tempfile.mkstemp(dir=run_dir, prefix=f".{LEDGER_FILE}.", suffix=".tmp")
         try:
             os.fchmod(fd, 0o644)  # mkstemp makes 0600; a ledger is an ordinary repo file
-            _write_all(fd, encode_line(first))
+            _write_all(fd, lines)
             os.fsync(fd)
             os.close(fd)
             fd = -1

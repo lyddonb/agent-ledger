@@ -147,6 +147,36 @@ def init_run(sink: RepoSink, run_id: str, *, actor: Actor, why: str, clock: Cloc
     return first
 
 
+@dataclass(frozen=True)
+class Prepared:
+    """An entry's text after redaction and the write-time rules, ready to chain."""
+
+    summary: str
+    why: str
+    evidence: list[str]
+    data: dict[str, Any]
+    redactions: dict[str, int]  # pattern name -> spans redacted
+
+
+def prepare(redactor: Redactor, *, actor: Actor, type: EntryType, summary: str, why: str,
+            evidence: Sequence[str] = (), data: Mapping[str, Any] | None = None) -> Prepared:
+    """Redact an entry's text, then apply every rule checked at write time. `append` and
+    `import-tsv` both write through this, so neither can skip a rule the other follows."""
+    fields, counts = redact_fields(redactor, {
+        "summary": summary, "why": why, "evidence": list(evidence), "data": dict(data or {})})
+    check_receipt(type, data)  # the caller's own mistake, reported before redaction can change the text
+    clean = fields["data"]
+    check_imported(clean)
+    check_spend(type, clean)
+    try:
+        check_receipt(type, clean)
+    except EntryError as e:
+        raise EntryError("schema", f"redaction changed the receipt, so it no longer follows the rules ({e}); "
+                                   f"a redaction pattern matches a value the receipt needs") from None
+    check_typed_by(actor, type, clean)
+    return Prepared(fields["summary"], fields["why"], fields["evidence"], clean, counts)
+
+
 def append(
     sink: RepoSink,
     run_id: str,
@@ -167,18 +197,9 @@ def append(
     The sink rejects an entry chained to a stale head, so on a race this re-reads the head
     and re-chains (with a fresh timestamp) instead of forking the chain.
     """
-    fields, _ = redact_fields(redactor or Redactor(), {
-        "summary": summary, "why": why, "evidence": list(evidence), "data": dict(data or {})})
-    check_receipt(type, data)  # the caller's own mistake, reported before redaction can change the text
-    summary, why, evidence, data = fields["summary"], fields["why"], fields["evidence"], fields["data"]
-    check_imported(data)
-    check_spend(type, data)
-    try:
-        check_receipt(type, data)
-    except EntryError as e:
-        raise EntryError("schema", f"redaction changed the receipt, so it no longer follows the rules ({e}); "
-                                   f"a redaction pattern matches a value the receipt needs") from None
-    check_typed_by(actor, type, data)
+    p = prepare(redactor or Redactor(), actor=actor, type=type, summary=summary, why=why,
+                evidence=evidence, data=data)
+    summary, why, evidence, data = p.summary, p.why, p.evidence, p.data
     if type is EntryType.SEAL and not _sealing:
         raise LedgerError("a seal entry is written by `ledger seal`, which also indexes it")
     for _ in range(APPEND_ATTEMPTS):
