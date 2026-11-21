@@ -6,7 +6,7 @@ The full plan, with all milestones and the reasoning, is in the "Governed agent 
 |---|---|---|
 | **M0. Foundation** (done: v1.0.0, 2026-11-15) | The `ledger` CLI (init, append, verify, show, seal, spend, session add, charter, import-tsv, scan), the repo sink and sink interface, redaction and the session archive, actor identity, the `ledger-verify` Action | You approve the [M0 charter](.audit/runs/2026-10-18-m0-foundation/charter.md) |
 | **Receipts** (v1.1.0, 2026-11-16) | The receipt convention for `verification` entries and `ledger receipts`, from the run `2026-11-17-criterion-receipts` | Done |
-| **import-tsv** (after v1.1.0, not yet released) | `ledger import-tsv`, the one M0 command that shipped as a stub: an old `decisions.tsv` trail becomes a run of imported entries (S3 "Migration") | Done; reaches a machine with the next release |
+| **import-tsv** (v1.2.0, 2026-11-21) | `ledger import-tsv`, the one M0 command that shipped as a stub: an old `decisions.tsv` trail becomes a run of imported entries (S3 "Migration") | Done |
 | M1. Quality and security | Charter fields for the spec ladder and security lens; review entries | M0's gate passes |
 | M2. Enforcement | `ledger charter render --audio/--video`; spend calibration from recorded runs | M1's gate passes |
 | M3. Harness lab | A second package, `harness-lab`: test agent-setup changes on a project's own tasks (spec S6 in the plan doc). Score human cost (interventions, review time) as well as pass rate, so it doesn't optimize for autonomy alone ([notes](docs/notes/steering-beyond-automation.md)). Its first slice is M3 unit 1, below | One app has a verification skill. Whether unit 1 opens before M1 and M2 is H8 |

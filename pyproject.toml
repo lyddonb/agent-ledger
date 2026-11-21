@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-ledger"
-version = "1.1.0"
+version = "1.2.0"
 description = "Tamper-evident, hash-chained records of what AI agents did in a repo, and why."
 readme = "README.md"
 license = {text = "MIT"}
