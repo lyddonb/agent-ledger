@@ -1,0 +1,10 @@
+$ python3 -m unittest discover -s tests   (python 3.12)
+Ran 311 tests in 56.252s
+
+OK (skipped=1)
+exit 0
+
+$ ledger verify
+ok: 3 runs, 3 sealed, 3 indexed
+note: without --base, lines cut from or rewritten in merged ledgers aren't checked
+exit 0
