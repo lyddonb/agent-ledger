@@ -11,8 +11,8 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | H5 | Pick the project for the M0 gate run | Needed by M0 unit 9 |
 | H6 | Allow only merge commits on `main` (turn off squash and rebase merging) | Done 2026-11-10: squash and rebase merging off, merge commits on |
 | H7 | Require the `ledger-verify` check on `main` | Done 2026-11-14: required with the three test checks, strict |
-| H8 | Decide whether M3 unit 1 opens before M1 and M2 | Needed by M3 unit 1 |
-| H9 | Decide whether evals may spend model calls in CI | Needed by M3 unit 1 |
+| H8 | Decide whether M3 unit 1 opens before M1 and M2 | Done 2026-11-21: yes, it opens early |
+| H9 | Decide whether evals may spend model calls in CI | Done 2026-11-21: local only for now |
 
 ### H1. Confirm the name
 Renaming is cheap until the repo is public and `uses: lyddonb/agent-ledger@v1` appears in other repos' CI. Rename the folder, `pyproject.toml`, the README and the specs if you want something else.
@@ -53,8 +53,15 @@ gh api -X POST repos/lyddonb/agent-ledger/branches/main/protection/required_stat
 ```
 Every project that adopts the Action needs the same rule.
 
-### H8. Does M3 unit 1 open before M1 and M2?
-The roadmap starts each milestone when the one before passes its gate. M3 unit 1 (hard rules as tool-call checks) is small and does not need M1's review entries or M2's enforcement. Decide: open it early, once agent-kit R38 has four weeks of rows, or hold it until M1 and M2 are done.
+### H8. Does M3 unit 1 open before M1 and M2? — Done
+**Answer (2026-11-21):** Yes. Beau's words: "H8 agree, yes." It opens before M1 and M2.
+Not settled by this answer: what "four weeks of rows" in agent-kit R38 means. The books hold
+rows for 2026-W41 and W43 to W46, booked in one run on 2026-11-21, and 109 of the 141 are in
+W46. Counting those, the wait is over. Counting only weeks the installed job books as they
+close (W47 to W50), it ends about 2026-12-20. The Prototype step (how to capture tool calls
+from `claude -p`) reads no rows and can start under either reading.
 
-### H9. May evals spend model calls in CI?
-Each case in M3 unit 1 is a headless agent run, so it costs model calls. Decide: give agent-kit's CI a secret and a budget line in the CFO books, or run the cases locally only until the cost per run is known. Either way the cases run only for changed plugins.
+### H9. May evals spend model calls in CI? — Done
+**Answer (2026-11-21):** Local only for now. Beau's words: "H9 agree, local only for now."
+agent-kit's CI gets no secret and no budget line. The cases run on a developer's machine until
+the Prototype step gives a cost per run; ask again with that number.
