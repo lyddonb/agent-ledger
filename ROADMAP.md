@@ -9,7 +9,7 @@ The full plan, with all milestones and the reasoning, is in the "Governed agent 
 | **import-tsv** (v1.2.0, 2026-11-21) | `ledger import-tsv`, the one M0 command that shipped as a stub: an old `decisions.tsv` trail becomes a run of imported entries (S3 "Migration") | Done |
 | M1. Quality and security | Charter fields for the spec ladder and security lens; review entries | M0's gate passes |
 | M2. Enforcement | `ledger charter render --audio/--video`; spend calibration from recorded runs | M1's gate passes |
-| M3. Harness lab | A second package, `harness-lab`: test agent-setup changes on a project's own tasks (spec S6 in the plan doc). Score human cost (interventions, review time) as well as pass rate, so it doesn't optimize for autonomy alone ([notes](docs/notes/steering-beyond-automation.md)). Its first slice is M3 unit 1, below | One app has a verification skill: met 2026-11-18 by `verify-ledger` (pull request 23). Whether unit 1 opens before M1 and M2 is H8 |
+| M3. Harness lab | A second package, `harness-lab`: test agent-setup changes on a project's own tasks (spec S6 in the plan doc). Score human cost (interventions, review time) as well as pass rate, so it doesn't optimize for autonomy alone ([notes](docs/notes/steering-beyond-automation.md)). Its first slice is M3 unit 1, below | One app has a verification skill: met 2026-11-18 by `verify-ledger` (pull request 23). Unit 1 opens before M1 and M2 (H8, answered 2026-11-21) |
 | M4. Collaboration and compliance | `s3-object-lock` and `external` sinks; role-based approvers | A teammate or an audit needs it |
 
 ## M0 units
@@ -31,10 +31,11 @@ ordinary receipt (criterion id, spec path, commit), and `ledger receipts` prints
 There is no separate eval store and no judge model. The first cases are three of agent-kit's
 hard rules: `qualitydirector` takes brief numbers from `summary --json` and never computes
 them; the Product phase playbook never ticks a box without `receipt.py`; no flaky test is
-re-run. agent-kit's CI runs only the cases for plugins its `check_versions.py` reports as
-changed.
-**Depends on:** agent-kit R38, so cases come from sessions that happened. H8 (does M3 open
-early?) and H9 (may evals spend model calls in CI?).
+re-run. Once H9 is asked again and allows it, agent-kit's CI runs only the cases for plugins its
+`check_versions.py` reports as changed. Until then they run locally.
+**Depends on:** agent-kit R38, so cases come from sessions that happened. H8 and H9 are
+answered (2026-11-21): the unit opens early, and its cases run locally, not in CI, until the
+Prototype step gives a cost per run.
 **Playbook:** Prototype first, to settle how to capture tool calls from `claude -p` and from
 one other tool. Then Feature, split into PRs with the Multi-phase plan playbook.
 **Done when:** each first case fails on a skill edit that removes the rule it guards, and
