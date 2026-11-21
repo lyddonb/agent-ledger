@@ -1,0 +1,37 @@
+name: changes
+
+# Reports a pull request that changes a file outside the bookkeeping files and adds no change
+# record (.changes/<date>-<slug>.json, written by agent-kit's debrief skill), or adds one with a
+# problem. Observe mode: it prints what it would have failed and never fails a pull request.
+# To enforce, drop --observe.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  change-record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: checked
+          fetch-depth: 0  # the check compares the pull request with where it left the base
+          persist-credentials: false
+
+      # Pinned so a change to the checker reaches this repo only through a PR here.
+      - uses: actions/checkout@v4
+        with:
+          repository: lyddonb/agent-kit
+          ref: 951bae90e7240a278c178de0af25a4d0b8eda050  # agent-kit main after #74 (debrief.py check --base)
+          path: agent-kit
+          sparse-checkout: plugins/bstack/skills/debrief/scripts
+          persist-credentials: false
+
+      - name: The pull request carries a change record (observe)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 agent-kit/plugins/bstack/skills/debrief/scripts/debrief.py check --base "origin/$BASE_REF" --root checked --observe

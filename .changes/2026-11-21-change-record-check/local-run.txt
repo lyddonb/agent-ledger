@@ -1,0 +1,9 @@
+$ debrief.py check --base origin/main --root . --observe   (agent-kit 951bae9, /usr/bin/python3 3.9.6, branch at 7c0a5fc, before the record was added)
+this pull request changes .github/workflows/changes.yml and adds no change record: write one with the debrief skill (`debrief.py new <slug>`) and commit it
+0 record(s) checked, 0 with problems
+observe: this pull request would have failed the change record check
+exit 0
+
+$ the same command, after the record was committed
+1 record(s) checked, 0 with problems
+exit 0

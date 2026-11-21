@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "goal": "Every pull request here should say whether it carries a change record, so this repo starts getting the brief, the kept evidence and release notes that agent-kit's debrief skill writes.",
+  "changed": [
+    "New workflow .github/workflows/changes.yml runs agent-kit's debrief.py check --base on every pull request, in observe mode.",
+    "It reports a pull request that changes a file outside the bookkeeping files and adds no record. It never fails one.",
+    "The checker is its own pinned checkout of agent-kit (main after #74). The pins the other checks use are untouched.",
+    "This is the first record in .changes/."
+  ],
+  "claims": [
+    {
+      "claim": "The command the workflow runs reports a pull request with no record, exits 0 in observe mode, and passes once a good record is committed.",
+      "verdict": "VERIFIED",
+      "check": "debrief.py check --base origin/main --root . --observe on this branch, with agent-kit at 951bae9 and /usr/bin/python3 3.9.6 on macOS: before the record it printed the would-have-failed line, after it printed 1 record checked, 0 with problems",
+      "commit": "7c0a5fc",
+      "record": ".changes/2026-11-21-change-record-check/local-run.txt",
+      "remaining": "The workflow file itself: its two checkouts, the sparse checkout and the base ref on a GitHub runner."
+    },
+    {
+      "claim": "The workflow runs in GitHub Actions on a pull request and does not fail it.",
+      "verdict": "UNCHECKED",
+      "check": "",
+      "commit": "",
+      "record": "",
+      "remaining": "This pull request's own run is the first. Read the step's log there."
+    },
+    {
+      "claim": "The checks this repo already runs still pass with a .changes/ folder in the tree.",
+      "verdict": "VERIFIED",
+      "check": "python3 -m unittest discover -s tests (the suite the test workflow records) and ledger verify",
+      "commit": "7c0a5fc",
+      "record": ".changes/2026-11-21-change-record-check/existing-checks.txt",
+      "remaining": "Run locally on macOS, not on the runner. CI on this pull request repeats them."
+    }
+  ],
+  "next": [
+    {
+      "item": "Drop --observe so a pull request with no record fails",
+      "source": "inferred",
+      "why_now": "Not yet. agent-kit is watching the same check for a week to see if docs-only pull requests make it noisy, and this repo should follow its answer.",
+      "impact": "Until then a pull request with no record still merges and the miss shows only in the CI log. 22 of 25 of this repo's recent merged pull requests would have needed a record."
+    },
+    {
+      "item": "Print release notes for this repo with debrief.py notes",
+      "source": "inferred",
+      "why_now": "Only useful once a few records with a release note exist, so after the next handful of pull requests.",
+      "impact": "You get a dated list of what changed for a user of this repo, which it has never had."
+    }
+  ],
+  "release": {"none": "CI only; nothing changes for a user of this repo"}
+}
