@@ -115,7 +115,7 @@ Reading the brief each run left on disk, instead of the call that wrote it, gave
 
 ### 5. A side effect: the case runs look like real skill use
 
-The 14 full runs kept their sessions under `~/.claude/projects/`, and each one called the `Skill` tool for `bstack:qualitydirector`. agent-kit's `quality.py book-skills` books every `Skill` call it finds there, with no filter on where the session ran. So the next weekly pass will book 14 uses of `qualitydirector` for the week of 2026-11-21 that were this prototype (read from the code, not from a booking run). The transcripts were left in place: deleting them is Beau's call. Eval runs must pass `--no-session-persistence`, which three probes here showed works with the stream.
+The 14 full runs kept their sessions under `~/.claude/projects/`, and each one called the `Skill` tool for `bstack:qualitydirector`. agent-kit's `quality.py book-skills` books every `Skill` call it finds there, with no filter on where the session ran. So the next weekly pass will book 14 uses of `qualitydirector` for the week of 2026-11-21 that were this prototype (read from the code, not from a booking run). Beau had the 14 transcripts deleted the same day, before any weekly pass ran, so nothing was booked. Eval runs must pass `--no-session-persistence`, which three probes here showed works with the stream.
 
 ## What was not settled
 
