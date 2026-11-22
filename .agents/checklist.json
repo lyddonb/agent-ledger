@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "entry-format",
+      "trigger": {
+        "paths": [
+          "src/agent_ledger/entry.py",
+          "src/agent_ledger/_canon.py",
+          "src/agent_ledger/verify.py",
+          "src/agent_ledger/receipt.py",
+          "src/agent_ledger/index.py",
+          "docs/specs/S3-audit-ledger.md"
+        ]
+      },
+      "check": {
+        "question": "Do chains written before this change still verify?",
+        "probe": "Run this branch's code on real chains. In this checkout, `ci/run_ledger.py verify` on Python 3.10 or newer must print `ok:` for the sealed runs under `.audit/runs/` and exit 0. Then run `ci/run_ledger.py verify --root <checkout>` on another repo that keeps ledgers written by the last tagged release (any repo with `.audit/runs/`). A new failure means the entry format changed for old entries: that is the `public-api` gate, and S3 needs a rule that keeps them verifying."
+      },
+      "source": "No broken chain is on record. The item comes from agent-kit's roadmap R30. Commits e101dc0 (redaction counts became pairs) and 17ec81e (append refuses a malformed receipt) are the kind of change it is for.",
+      "added": "2026-11-21",
+      "review_by": "2027-02-21"
+    }
+  ]
+}
