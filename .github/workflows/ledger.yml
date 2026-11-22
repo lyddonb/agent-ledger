@@ -39,6 +39,18 @@ jobs:
         with:
           root: checked
 
+  ledger-verify-namegap:
+    # SCRATCH (H13 name-gap test, never merge): a second job whose CHECK-RUN NAME is also
+    # "ledger-verify", running green on the pull_request event, to sit beside the red
+    # pull_request_target run from the base branch. The real ledger-verify job above is left
+    # intact so the workflow-shape test still passes.
+    name: ledger-verify
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "a same-named ledger-verify check from the pull request's own workflow copy"
+
   ledger-verify-self:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
