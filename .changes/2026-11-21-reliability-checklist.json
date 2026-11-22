@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "goal": "agent-ledger gets its first reliability checklist item, from agent-kit's roadmap R30: an entry format change keeps existing chains verifying.",
+  "changed": [
+    ".agents/checklist.json holds one item, entry-format. It fires on a change to the entry model, canonical hashing, verify, receipts, the index or the S3 spec, and asks whether chains written before the change still verify.",
+    "AGENTS.md points at the file."
+  ],
+  "claims": [
+    {
+      "claim": "The item fires on past commits that changed the entry format (e101dc0, 17ec81e) and stays quiet on a docs-only commit (9036afc).",
+      "verdict": "VERIFIED",
+      "check": "agent-kit's checklist.py --base C^ --head C under /usr/bin/python3 3.9.6; replay over 104 commits, fired on 24",
+      "commit": "25a3fac",
+      "record": ".changes/2026-11-21-reliability-checklist/replay.txt",
+      "remaining": "It has never caught a broken chain: none is on record. A replay of each format commit's verify on the chains before it found 0 broken runs."
+    },
+    {
+      "claim": "The item's probe can be run as written: this checkout's verify passes on its own three sealed runs and on the ledgers of two sibling repos.",
+      "verdict": "VERIFIED",
+      "check": "ci/run_ledger.py verify, and verify --root on two sibling repos, on Python 3.12",
+      "commit": "25a3fac",
+      "record": ".changes/2026-11-21-reliability-checklist/replay.txt",
+      "remaining": "Whether an agent runs it. Nothing enforces the checklist, and CI does not read it."
+    }
+  ],
+  "next": [],
+  "release": {"none": "no change to the ledger command; the file is read by an agent's verify-work"}
+}

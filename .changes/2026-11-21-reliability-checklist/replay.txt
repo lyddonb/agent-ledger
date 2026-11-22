@@ -1,0 +1,36 @@
+agent-kit's checklist.py (bstack 0.31.0) on this repo's .agents/checklist.json at 25a3fac, Python 3.9.6, macOS. Each run: checklist.py --base C^ --head C, stdout and stderr together.
+
+$ checklist.py --base e101dc0^ --head e101dc0    # fix(session): record redaction counts as [name, count] pairs
+checklist: 1 of 1 items match 0e7fc56..e101dc0 (4 changed files)
+entry-format
+  fired on: docs/specs/S3-audit-ledger.md
+  question: Do chains written before this change still verify?
+  probe: Run this branch's code on real chains. In this checkout, `ci/run_ledger.py verify` on Python 3.10 or newer must print `ok:` for the sealed runs under `.audit/runs/` and exit 0. Then run `ci/run_ledger.py verify --root <checkout>` on another repo that keeps ledgers written by the last tagged release (any repo with `.audit/runs/`). A new failure means the entry format changed for old entries: that is the `public-api` gate, and S3 needs a rule that keeps them verifying.
+  source: No broken chain is on record. The item comes from agent-kit's roadmap R30. Commits e101dc0 (redaction counts became pairs) and 17ec81e (append refuses a malformed receipt) are the kind of change it is for.
+  added 2026-11-21, review by 2027-02-21
+[exit 0]
+
+$ checklist.py --base 17ec81e^ --head 17ec81e    # feat(receipt): refuse a malformed receipt on ledger append
+checklist: 1 of 1 items match 2a9137f..17ec81e (3 changed files)
+entry-format
+  fired on: docs/specs/S3-audit-ledger.md (and 1 more file)
+  question: Do chains written before this change still verify?
+  probe: Run this branch's code on real chains. In this checkout, `ci/run_ledger.py verify` on Python 3.10 or newer must print `ok:` for the sealed runs under `.audit/runs/` and exit 0. Then run `ci/run_ledger.py verify --root <checkout>` on another repo that keeps ledgers written by the last tagged release (any repo with `.audit/runs/`). A new failure means the entry format changed for old entries: that is the `public-api` gate, and S3 needs a rule that keeps them verifying.
+  source: No broken chain is on record. The item comes from agent-kit's roadmap R30. Commits e101dc0 (redaction counts became pairs) and 17ec81e (append refuses a malformed receipt) are the kind of change it is for.
+  added 2026-11-21, review by 2027-02-21
+[exit 0]
+
+$ checklist.py --base 9036afc^ --head 9036afc    # docs(notes): the prototype's transcripts were deleted
+checklist: 0 of 1 items match 61b8d7f..9036afc (1 changed file)
+[exit 0]
+
+Replay over the 104 non-merge commits on origin/main that have a parent: the item fired on 24.
+
+The item's probe, with this checkout's code on Python 3.12:
+$ ci/run_ledger.py verify
+ok: 3 runs, 3 sealed, 3 indexed
+note: without --base, lines cut from or rewritten in merged ledgers aren't checked
+[exit 0]
+$ ci/run_ledger.py verify --root <a sibling repo with ledgers>    # run on two such repos
+ok: 3 runs, 3 sealed, 3 indexed
+ok: 1 runs, 1 sealed, 1 indexed
