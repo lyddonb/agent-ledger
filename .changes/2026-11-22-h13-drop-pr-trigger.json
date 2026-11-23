@@ -6,11 +6,16 @@
   ],
   "claims": [
     {
-      "claim": "main's pull_request_target run of change-record works on a real pull request.",
-      "verdict": "UNCHECKED",
-      "remaining": "Filled in from this pull request's own run once it finishes."
+      "claim": "main's pull_request_target run of change-record works on a real pull request, and this pull request's own copy no longer runs.",
+      "verdict": "VERIFIED",
+      "check": "gh run list on this pull request's first head: changes ran once, on pull_request_target, success; its log shows the merge-ref head check passing and 'debrief.py check' printing '1 record(s) checked, 0 with problems'.",
+      "commit": "db764e7f429a7d22464b0d7897fff8b76419f229",
+      "record": "https://github.com/lyddonb/agent-ledger/actions/runs/45104633831",
+      "remaining": "Observe mode here (--observe), so the run can fail only on the head check until H16 step 3 enforces it."
     }
   ],
   "next": [],
-  "release": {"none": "CI only."}
+  "release": {
+    "none": "CI only."
+  }
 }
