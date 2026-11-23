@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "goal": "Stop a pull request from weakening the change record check that judges it (agent-kit H13, run 2026-11-22-protect-gates in lyddonb/quality). The check ran only from the pull request's own changes.yml, so the pull request could move the checker pin or change its flags.",
+  "changed": [
+    "changes.yml also runs on pull_request_target. That run reads changes.yml and the checker pin from main, checks out the pull request's merge commit as data, and runs no code from it.",
+    "Both runs check that refs/pull/N/merge holds the pull request's current head, as ledger.yml in quality and finances does.",
+    "Step 1 of 2: a later pull request drops the pull_request trigger, once a real pull request has shown the base-branch run passing."
+  ],
+  "claims": [
+    {
+      "claim": "A later run with the same name doesn't override a failing run of a required check: both must pass.",
+      "verdict": "VERIFIED",
+      "check": "Scratch PR 36 here, on base 5d1a330: the base-branch ledger-verify failed, a same-name pull_request job passed three minutes later, GraphQL isRequired was true for both and mergeStateStatus stayed BLOCKED. Repeated under a ruleset on agent-kit PR 92.",
+      "commit": "5d1a330dc927f2a62c88193927715bd184a25b76",
+      "record": "https://github.com/lyddonb/agent-ledger/pull/36",
+      "remaining": "Measured in one order (failure first). A failure that finishes last is blocked by the same rule."
+    },
+    {
+      "claim": "The pull_request_target run of change-record works on main.",
+      "verdict": "UNCHECKED",
+      "remaining": "GitHub runs pull_request_target only from the default branch, so it can't run before this merges. The first pull request after the merge shows it; the step-2 PR cites that run."
+    }
+  ],
+  "next": [
+    {"item": "Drop the pull_request trigger from changes.yml", "source": "run 2026-11-22-protect-gates unit 5", "why_now": "Until then the pull request's own copy still runs beside the base copy, which costs a second job per PR", "impact": "One change-record run per PR, read only from main"}
+  ],
+  "release": {"none": "CI only: what a contributor sees is a second change-record run on each pull request until step 2."}
+}
