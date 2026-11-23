@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "goal": "Hold this repo's pull requests to a change record (agent-kit H16 step 3, Beau: \"i want to enforce now\") without failing the pull requests that only carry reviewed data.",
+  "changed": [
+    "The change record check enforces: --observe is gone from changes.yml, and both pin agent-kit 079eca5, whose debrief.py reads .changes/exempt from the base branch.",
+    ".changes/exempt lists this repo's data paths: docs/notes/. A pull request that changes only those, or only bookkeeping files, needs no record; any other change does."
+  ],
+  "claims": [
+    {
+      "claim": "With this branch as the base, a pull request that touches only the exempt paths passes, the same pull request plus a change to AGENTS.md fails, and a pull request that adds AGENTS.md to .changes/exempt and edits it still fails.",
+      "verdict": "VERIFIED",
+      "check": "Throwaway clones of this branch at a4fa999 with agent-kit 079eca5's debrief.py check --base <branch tip>: exit 0, 1 and 1. Also python3 <agent-kit 079eca5>/plugins/bstack/skills/debrief/scripts/debrief.py check --base origin/main --root . on this branch before the record: it failed naming only this PR's own files.",
+      "commit": "a4fa999",
+      "record": ".changes/2026-11-22-enforce-change-record/checks.txt",
+      "remaining": "The check on GitHub runs once this PR is open; its result on this PR is the live proof."
+    },
+    {
+      "claim": "Replayed with these exempt paths, the brief and data PRs since 2026-11-21 (#32 and #33) pass and the PRs that changed code or workflows with no record fail.",
+      "verdict": "VERIFIED",
+      "check": "agent-kit's replay.sh: each PR merged into its base plus this .changes/exempt, checked with the same debrief.py and no --observe; verdicts written before the run all matched",
+      "commit": "a4fa999",
+      "record": "https://github.com/lyddonb/agent-kit/blob/main/.changes/2026-11-22-exempt-list/replay.txt",
+      "remaining": "Ran against the PRs' history, not as new PRs on GitHub."
+    }
+  ],
+  "next": [],
+  "release": {"none": "CI policy only: nothing a reader of this repo's output sees changes."}
+}

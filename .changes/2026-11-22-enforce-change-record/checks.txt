@@ -1,0 +1,21 @@
+== python3 <agent-kit 079eca5>/plugins/bstack/skills/debrief/scripts/debrief.py check --base origin/main --root . at a4fa999 (before this record was committed): the enforced check fails for the missing record and nothing else
+this pull request changes .github/workflows/changes.yml and adds no change record: write one with the debrief skill (`debrief.py new <slug>`) and commit it
+0 record(s) checked, 0 with problems
+
+== agent-ledger, base = ci/enforce-change-record at a4fa999 (standing in for main after merge), checker agent-kit 079eca5
+--- a brief-shaped PR touching only: docs/notes/x.md
+exempt on a4fa999 (.changes/exempt): docs/notes
+0 record(s) checked, 0 with problems
+exit 0
+--- the same data plus AGENTS.md, no record
+this pull request changes AGENTS.md and adds no change record: write one with the debrief skill (`debrief.py new <slug>`) and commit it
+exempt on a4fa999 (.changes/exempt): docs/notes
+0 record(s) checked, 0 with problems
+exit 1
+--- a PR that adds AGENTS.md to .changes/exempt and edits AGENTS.md, no record
+this pull request changes AGENTS.md and adds no change record: write one with the debrief skill (`debrief.py new <slug>`) and commit it
+exempt on a4fa999 (.changes/exempt): docs/notes
+0 record(s) checked, 0 with problems
+exit 1
+
+== Replay of this repo's PRs since 2026-11-21 with these exempt paths: https://github.com/lyddonb/agent-kit/blob/main/.changes/2026-11-22-exempt-list/replay.txt
