@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "goal": "Finish moving the change record check out of the pull request's reach (agent-kit H13, step 2 of 2): only main's copy of changes.yml judges a pull request.",
+  "changed": [
+    "changes.yml runs only on pull_request_target. The pull request's own copy no longer runs, so each pull request gets one change-record run."
+  ],
+  "claims": [
+    {
+      "claim": "main's pull_request_target run of change-record works on a real pull request.",
+      "verdict": "UNCHECKED",
+      "remaining": "Filled in from this pull request's own run once it finishes."
+    }
+  ],
+  "next": [],
+  "release": {"none": "CI only."}
+}
