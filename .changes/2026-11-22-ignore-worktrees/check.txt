@@ -1,0 +1,5 @@
+On cc77134dfd72a0f16ad807f472d48114915f02ae (chore: ignore .worktrees/), with a file at .worktrees/probe/f:
+$ git check-ignore -v .worktrees/probe/f
+.gitignore:13:.worktrees/	.worktrees/probe/f
+$ git status --porcelain -- .worktrees | wc -l
+0
