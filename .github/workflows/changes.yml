@@ -5,10 +5,8 @@ name: changes
 # problem. Paths listed in .changes/exempt, as main has it, need no record (see that file).
 
 on:
-  pull_request:
-  # The base branch's copy of this file also runs, on pull_request_target, and a pull request
-  # can't edit that copy: not the checker pin, not its flags. Every run of a required check must
-  # pass, so the pull request's own copy (on pull_request) can't outvote it (agent-kit H13).
+  # Only main's copy of this file runs, on pull_request_target, so a pull request can't edit the
+  # checker pin or its flags for its own check (agent-kit H13).
   # edited: retargeting a pull request to another base reruns the check against the new base.
   pull_request_target:
     branches: [main]
@@ -25,7 +23,7 @@ jobs:
       - name: The change to check (data only)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
           path: checked
           fetch-depth: 0  # the check compares the pull request with where it left the base
           persist-credentials: false
@@ -33,7 +31,6 @@ jobs:
       # GitHub rebuilds refs/pull/N/merge in the background, so right after a push it can still
       # hold the previous head; a check of that would pass for the new one.
       - name: The merge commit holds the pull request's current head
-        if: github.event_name != 'push'
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
