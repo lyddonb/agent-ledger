@@ -9,3 +9,5 @@ dist/
 .ledger.jsonl.*.tmp
 # Evidence from the verify-ledger skill (control-ledger launch)
 .verify/
+# Local git worktrees made by agents and people
+.worktrees/
