@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: lyddonb/agent-kit
-          ref: 079eca5a46b95ab584d0b865c82a657f58555189  # agent-kit main after #97 (debrief.py check reads .changes/exempt)
+          ref: 1e7fa2d9e25800d090613615f04b2fa8acdad755  # agent-kit main after #106 (debrief reads records as plain files and pointers as literal paths)
           path: agent-kit
           sparse-checkout: plugins/bstack/skills/debrief/scripts
           persist-credentials: false

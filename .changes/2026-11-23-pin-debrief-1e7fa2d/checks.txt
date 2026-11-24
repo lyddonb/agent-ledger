@@ -1,0 +1,9 @@
+# agent-ledger, branch ci/pin-debrief-1e7fa2d, run 2026-11-23, on commit 36b81b2
+## new pin: agent-kit 1e7fa2d
+exempt on origin/main (.changes/exempt): docs/notes
+1 record(s) checked, 0 with problems
+exit=0
+## old pin: agent-kit 079eca5
+exempt on origin/main (.changes/exempt): docs/notes
+1 record(s) checked, 0 with problems
+exit=0

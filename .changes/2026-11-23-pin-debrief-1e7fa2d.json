@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "goal": "This repo's change-record check runs the debrief checker from agent-kit main after #106, which reads records as plain files and pointers as literal paths.",
+  "changed": [
+    "changes.yml pins the agent-kit checkout to 1e7fa2d (main after #106). It was 079eca5 (after #97)."
+  ],
+  "claims": [
+    {
+      "claim": "The checker at 1e7fa2d passes this branch, including this record.",
+      "verdict": "VERIFIED",
+      "check": "python3 -I debrief.py check --base origin/main --root . from agent-kit 1e7fa2d, run on this branch",
+      "commit": "a646448",
+      "record": ".changes/2026-11-23-pin-debrief-1e7fa2d/checks.txt",
+      "remaining": "Under pull_request_target this PR is checked by main's pin; the new pin first runs on the next PR after merge."
+    }
+  ],
+  "next": [],
+  "release": {
+    "none": "CI configuration only; nothing ships."
+  }
+}
