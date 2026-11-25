@@ -12,8 +12,9 @@ inputs:
   base:
     description: >-
       The ref whose merged ledgers must stay unchanged apart from appended lines. Default: for a
-      pull request, the merge commit's first parent (the base branch as GitHub merged it); for a
-      merge queue, its base; for a push, the commit before the push.
+      pull request, the merge commit's first parent (the base branch as GitHub merged it), or for
+      a stacked pull request the newest base-branch commit it contains; for a merge queue, its
+      base; for a push, the commit before the push.
     required: false
     default: ""
   python-version:
@@ -32,6 +33,7 @@ runs:
       shell: bash
       env:
         RUNNER_SCRIPT: ${{ github.action_path }}/ci/run_ledger.py
+        PR_BASE_SCRIPT: ${{ github.action_path }}/ci/pr_base.py
         ROOT_INPUT: ${{ inputs.root }}
         BASE_INPUT: ${{ inputs.base }}
         EVENT: ${{ github.event_name }}
@@ -49,17 +51,9 @@ runs:
         if [ -z "$base" ]; then
           case "$EVENT" in
             pull_request|pull_request_target)
-              # GitHub's merge commit: its first parent is the base branch as it was merged
-              # with, so a base branch that moved on since can't fail an honest change.
-              if ! git -C "$root" rev-parse --verify --quiet HEAD^2 >/dev/null; then
-                echo "::error::check out the pull request's merge commit (refs/pull/<n>/merge), not its head"
-                exit 1
-              fi
-              base="$(git -C "$root" rev-parse HEAD^1)"
-              if ! git -C "$root" merge-base --is-ancestor "$base" "refs/remotes/origin/$PR_BASE"; then
-                echo "::error::the merge commit's first parent isn't on origin/$PR_BASE"
-                exit 1
-              fi
+              # The merge commit's first parent, or for a stacked pull request the newest
+              # commit of origin/$PR_BASE it contains (ci/pr_base.py says why).
+              base="$(python -I "$PR_BASE_SCRIPT" "$root" "$PR_BASE")" || { echo "$base"; exit 1; }
               ;;
             merge_group)
               base="$MERGE_GROUP_BASE"
