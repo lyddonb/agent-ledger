@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "goal": "A pull request stacked on another one passes ledger-verify when its ledgers are honest, instead of failing because the merge commit's first parent isn't on main.",
+  "changed": [
+    "ci/pr_base.py picks a pull request's base. It is the merge commit's first parent, as before, or when that isn't on origin/<base> (a GitHub stack: github.base_ref names main while refs/pull/<n>/merge sits on the parent branch), their merge base: the newest commit of origin/<base> the pull request contains. A parent with no history in common with origin/<base> still fails.",
+    "action.yml calls it instead of failing the stacked case. The S3 spec's Base rule and the base input's description say the same."
+  ],
+  "claims": [
+    {
+      "claim": "A stacked pull request with honest ledgers passes, checked against the main commit the stack forked from, with a notice saying so.",
+      "verdict": "VERIFIED",
+      "check": "cd tests && python3.12 -m unittest test_scan.ActionScriptTest (test_a_stacked_pull_request_is_checked_against_the_main_commit_it_forked_from), which runs the Action's real step on a git repo built like a GitHub stack",
+      "commit": "bdeb5cc",
+      "record": ".changes/2026-11-24-stacked-pr-base/checks.txt",
+      "remaining": "Seen in a real stack only as the failure (lyddonb/curator#273 and #274, 2026-11-24); the pass on GitHub follows once a project pins this commit."
+    },
+    {
+      "claim": "A stack whose lower pull request rewrites a merged line on main still fails with base-changed, and a first parent with no history in common with main is refused.",
+      "verdict": "VERIFIED",
+      "check": "cd tests && python3.12 -m unittest test_scan.ActionScriptTest (test_a_stack_that_rewrites_a_merged_main_line_still_fails, test_a_first_parent_with_no_history_in_common_with_main_is_refused)",
+      "commit": "bdeb5cc",
+      "record": ".changes/2026-11-24-stacked-pr-base/checks.txt"
+    },
+    {
+      "claim": "The three new tests fail with origin/main's action.yml, and the whole suite passes with this one.",
+      "verdict": "VERIFIED",
+      "check": "the same ActionScriptTest run with origin/main's action.yml: 3 failures; then python3.12 -m unittest discover -s tests",
+      "commit": "bdeb5cc",
+      "record": ".changes/2026-11-24-stacked-pr-base/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "Tag a release and bump curator's pin (.github/workflows/ledger.yml, lyddonb/agent-ledger@f77709d) to it",
+      "source": "inferred",
+      "why_now": "curator merges stacked pull requests now (P11 B1 was a stack of three), and each one above the bottom failed ledger-verify until the one below it merged.",
+      "impact": "Beau stops seeing a red ledger-verify on every stacked curator pull request, so a red check there means a real ledger problem again."
+    }
+  ],
+  "release": {
+    "note": "ledger-verify no longer fails a pull request stacked on another one: it checks the stack against the newest base-branch commit it contains."
+  }
+}
