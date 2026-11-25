@@ -173,7 +173,8 @@ class ActionScriptTest(unittest.TestCase):
 
     def run_step(self, **env):
         full = dict(os.environ, PATH=f"{self.bin}:{os.environ['PATH']}", GITHUB_WORKSPACE=str(self.repo.root),
-                    RUNNER_SCRIPT=str(ROOT / "ci/run_ledger.py"), ROOT_INPUT=".", BASE_INPUT="", EVENT="push",
+                    RUNNER_SCRIPT=str(ROOT / "ci/run_ledger.py"),
+                    PR_BASE_SCRIPT=str(ROOT / "ci/pr_base.py"), ROOT_INPUT=".", BASE_INPUT="", EVENT="push",
                     PR_BASE="", MERGE_GROUP_BASE="", PUSH_BEFORE="")
         full.update(env)
         return subprocess.run(["bash", "-c", _action_script()], cwd=self.repo.root, env=full,
@@ -246,6 +247,51 @@ class ActionScriptTest(unittest.TestCase):
         proc = self.run_pr()
         self.assertEqual(proc.returncode, 1)
         self.assertIn("github_token match", proc.stdout)
+
+    def stack(self, lower, upper):
+        """A stack: `lower` on a branch off main, `upper` on a branch off that. Main moves on, and
+        GitHub builds the upper pull request's merge commit on the lower branch, as it does in a
+        stack, while `github.base_ref` names main."""
+        self.repo.git("checkout", "-q", "-b", "lower", self.main)
+        lower()
+        self.repo.commit("lower")
+        self.repo.git("checkout", "-q", "-b", "upper")
+        upper()
+        self.repo.commit("upper")
+        self.repo.git("checkout", "-q", "main")
+        self.more("later on main")
+        self.repo.commit("main moved")
+        self.repo.git("update-ref", "refs/remotes/origin/main", "main")
+        self.repo.git("checkout", "-q", "--detach", "lower")
+        self.repo.git("merge", "-q", "--no-ff", "-m", "Merge upper", "upper")
+
+    def test_a_stacked_pull_request_is_checked_against_the_main_commit_it_forked_from(self):
+        self.stack(lambda: self.more("lower"), lambda: self.more("upper"))
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("stacked pull request", proc.stderr)
+        self.assertIn(f"merged lines unchanged since {self.main.strip()}", proc.stdout)
+
+    def test_a_stack_that_rewrites_a_merged_main_line_still_fails(self):
+        path = self.repo.ledger(RUN_A)
+        self.stack(lambda: path.write_bytes(path.read_bytes().replace(b"step 0", b"step X")),
+                   lambda: (self.repo.sink.run_dir(RUN_A) / "notes.md").write_text("upper\n"))
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("base-changed", proc.stdout)
+
+    def test_a_first_parent_with_no_history_in_common_with_main_is_refused(self):
+        self.repo.git("update-ref", "refs/remotes/origin/main", self.main)
+        self.repo.git("checkout", "-q", "--orphan", "stranger")
+        self.repo.commit("stranger")
+        self.repo.git("checkout", "-q", "-b", "upper")
+        self.more()
+        self.repo.commit("upper")
+        self.repo.git("checkout", "-q", "--detach", "stranger")
+        self.repo.git("merge", "-q", "--no-ff", "-m", "Merge upper", "upper")
+        proc = self.run_pr()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("shares no history with origin/main", proc.stdout)
 
     def test_a_merge_queue_uses_its_base(self):
         self.pr(self.more)

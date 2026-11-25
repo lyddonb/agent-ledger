@@ -1,0 +1,36 @@
+$ (cd tests && python3.12 -m unittest test_scan.ActionScriptTest -v)  # at bdeb5cc
+test_a_base_that_moved_on_doesnt_fail_an_honest_pr (test_scan.ActionScriptTest.test_a_base_that_moved_on_doesnt_fail_an_honest_pr) ... ok
+test_a_first_parent_with_no_history_in_common_with_main_is_refused (test_scan.ActionScriptTest.test_a_first_parent_with_no_history_in_common_with_main_is_refused) ... ok
+test_a_merge_queue_uses_its_base (test_scan.ActionScriptTest.test_a_merge_queue_uses_its_base) ... ok
+test_a_new_branch_push_warns_and_checks_chains (test_scan.ActionScriptTest.test_a_new_branch_push_warns_and_checks_chains) ... ok
+test_a_pull_request_is_checked_against_the_merge_base (test_scan.ActionScriptTest.test_a_pull_request_is_checked_against_the_merge_base) ... ok
+test_a_push_uses_the_commit_before_it (test_scan.ActionScriptTest.test_a_push_uses_the_commit_before_it) ... ok
+test_a_rewritten_merged_line_fails_the_job (test_scan.ActionScriptTest.test_a_rewritten_merged_line_fails_the_job) ... ok
+test_a_secret_fails_the_job_even_when_verify_passes (test_scan.ActionScriptTest.test_a_secret_fails_the_job_even_when_verify_passes) ... ok
+test_a_shallow_clone_is_refused (test_scan.ActionScriptTest.test_a_shallow_clone_is_refused) ... ok
+test_a_stack_that_rewrites_a_merged_main_line_still_fails (test_scan.ActionScriptTest.test_a_stack_that_rewrites_a_merged_main_line_still_fails) ... ok
+test_a_stacked_pull_request_is_checked_against_the_main_commit_it_forked_from (test_scan.ActionScriptTest.test_a_stacked_pull_request_is_checked_against_the_main_commit_it_forked_from) ... ok
+test_a_token_inside_a_fake_placeholder_is_found (test_scan.ActionScriptTest.test_a_token_inside_a_fake_placeholder_is_found) ... ok
+test_another_event_without_a_base_fails (test_scan.ActionScriptTest.test_another_event_without_a_base_fails) ... ok
+test_every_expression_reaches_the_shell_through_env (test_scan.ActionScriptTest.test_every_expression_reaches_the_shell_through_env) ... ok
+test_removing_a_redact_pattern_cant_hide_its_secret (test_scan.ActionScriptTest.test_removing_a_redact_pattern_cant_hide_its_secret) ... ok
+test_the_pr_head_instead_of_its_merge_commit_is_refused (test_scan.ActionScriptTest.test_the_pr_head_instead_of_its_merge_commit_is_refused) ... ok
+test_the_root_input_checks_a_separate_checkout (test_scan.ActionScriptTest.test_the_root_input_checks_a_separate_checkout) ... ok
+test_the_step_cannot_be_hijacked_by_the_checked_repo (test_scan.ActionScriptTest.test_the_step_cannot_be_hijacked_by_the_checked_repo) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 18.236s
+
+OK
+
+$ same tests with origin/main's action.yml
+FAIL: test_a_first_parent_with_no_history_in_common_with_main_is_refused (test_scan.ActionScriptTest.test_a_first_parent_with_no_history_in_common_with_main_is_refused)
+FAIL: test_a_stack_that_rewrites_a_merged_main_line_still_fails (test_scan.ActionScriptTest.test_a_stack_that_rewrites_a_merged_main_line_still_fails)
+FAIL: test_a_stacked_pull_request_is_checked_against_the_main_commit_it_forked_from (test_scan.ActionScriptTest.test_a_stacked_pull_request_is_checked_against_the_main_commit_it_forked_from)
+Ran 18 tests in 16.121s
+FAILED (failures=3)
+
+$ (cd tests && python3.12 -m unittest discover -s .)
+Ran 314 tests in 37.491s
+
+OK (skipped=1)
