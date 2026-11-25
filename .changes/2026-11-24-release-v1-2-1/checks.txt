@@ -1,0 +1,7 @@
+$ (cd tests && python3.12 -m unittest discover -s .)
+Ran 314 tests in 58.580s
+
+OK (skipped=1)
+
+$ PYTHONPATH=src python3.12 -m agent_ledger.cli --version
+ledger 1.2.1
