@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "goal": "Projects can pin a tagged agent-ledger release whose ledger-verify Action passes stacked pull requests (#42).",
+  "changed": [
+    "The version is 1.2.1 in pyproject.toml, src/agent_ledger/__init__.py, uv.lock and the README's status line."
+  ],
+  "claims": [
+    {
+      "claim": "The suite passes at 1.2.1 and the CLI reports the new version.",
+      "verdict": "VERIFIED",
+      "check": "cd tests && python3.12 -m unittest discover -s .; ledger --version from src",
+      "commit": "bc933f4",
+      "record": ".changes/2026-11-24-release-v1-2-1/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "Tag v1.2.1 on this PR's merge commit, publish the release, and bump curator's ledger-verify pin from f77709d to it",
+      "source": "inferred",
+      "why_now": "curator's stacked pull requests fail ledger-verify until its pin includes #42.",
+      "impact": "A red ledger-verify on a curator pull request means a real ledger problem again, not a stack."
+    }
+  ],
+  "release": {
+    "note": "1.2.1: the ledger-verify Action no longer fails a pull request stacked on another one. It checks the stack against the newest base-branch commit it contains, so main's ledgers must still stay append-only (#42)."
+  }
+}

@@ -1,3 +1,3 @@
 """agent-ledger: tamper-evident records of agent runs. See docs/specs/."""
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
