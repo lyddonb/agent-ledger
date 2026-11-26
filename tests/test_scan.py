@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import T0  # noqa: F401  (puts src on the path)
+from helpers import GROWTH_LIMIT, GROWTH_STEP, cpu_growth
 from test_cli import run_cli
 from test_seal import AGENT, GitRepo, RUN_A
 
@@ -89,11 +89,13 @@ class ScanTest(unittest.TestCase):
         self.assertTrue(any("budget" in w for _, _, w in self.kinds()))
 
     def test_a_long_line_of_placeholders_scans_in_linear_time(self):
-        import time
-        line = "[REDACTED:anthropic_key] " * 200_000
-        start = time.perf_counter()
-        self.assertIsNone(Redactor().find(line))
-        self.assertLess(time.perf_counter() - start, 5.0)
+        r = Redactor([r"[A-Z]{8}"])
+        placeholder, n = "[REDACTED:anthropic_key] ", 250
+        small, large = placeholder * n, placeholder * (n * GROWTH_STEP)
+        self.assertIsNone(r.find(large), "a policy match inside every placeholder is still clean")
+        growth = cpu_growth(r.find, small, large)
+        self.assertLess(growth, GROWTH_LIMIT,
+                        f"{GROWTH_STEP}x the placeholders took {growth:.1f}x the CPU time")
 
     def test_base_scans_only_committed_changes(self):
         (self.run_dir / "old.md").write_text(f"{FAKE_KEY}\n")
