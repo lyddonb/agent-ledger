@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import helpers  # noqa: F401  (puts src on the path)
+import helpers
 
 from agent_ledger.redact import BUILTIN, PolicyError, Redactor, Unconfirmed, policy_patterns, read_policy_patterns
 
@@ -235,11 +235,10 @@ class EscapingTest(unittest.TestCase):
             json.loads(out)
 
     def test_url_pattern_is_linear_on_dotted_runs(self):
-        import time
-        text = "a." * 200_000
-        start = time.perf_counter()
-        Redactor().redact(text)
-        self.assertLess(time.perf_counter() - start, 2.0)
+        n = 2000
+        growth = helpers.cpu_growth(Redactor().redact, "a." * n, "a." * (n * helpers.GROWTH_STEP))
+        self.assertLess(growth, helpers.GROWTH_LIMIT,
+                        f"{helpers.GROWTH_STEP}x the dotted run took {growth:.1f}x the CPU time")
 
     def test_a_policy_pattern_that_matches_inside_a_placeholder_is_fine(self):
         out = Redactor([r"[A-Z]{8}"]).redact("key " + "sk-" + "ant-" + "q" * 30 + " and ABCDEFGH")
