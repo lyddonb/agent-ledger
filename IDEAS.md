@@ -23,5 +23,6 @@ Context and reasoning: [docs/notes/intent-over-steps.md](docs/notes/intent-over-
 - **Criterion receipts**: shipped in 1.1.0 (S3, "Receipt entries").
 - **`rejection` entries**: when the human rejects work whose checks passed, record what was rejected, the missing criterion or probe, and the criterion added. `reflect` and `correct` in agent-kit read them across sessions. A new entry type, so check it against format v1 like `steer` and `disagreement`.
 - **`flag` as its own entry type**: flags start as `lesson` entries with `data.kind: "flag"` (Flags unit 1). When `rejection` forces format v2, promote `flag` to its own type in the same bump, so verify can check its keys.
+- **`ledger flag`**: one command that finds this week's `flags-<machine>` run, starts it when there is none, and appends the flag. Flags unit 1 tried plain `ledger append` and kept it: the append is one command, and the awkward part is finding the run (a few lines of shell in S3), which a `--flag` shorthand on `append` wouldn't remove. Prioritize when agents following agent-kit R45 get the lookup wrong. It is a new command, so the `public-api` gate.
 - **Fix proofs**: a verification entry that cites the probe failing on the base commit and passing on the fix commit, so "the fix counts only when the old code fails" is checkable from the ledger.
 

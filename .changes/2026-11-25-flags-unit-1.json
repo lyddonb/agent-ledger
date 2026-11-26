@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "goal": "An agent that finds a skill, reference or pointer wrong mid-task can record it as a flag in the ledger with one documented command, so a weekly pass can read the week's flags and propose fixes.",
+  "changed": [
+    "S3 gains Flag entries: a lesson entry with data.kind \"flag\", data.target, data.did_instead and data.suggested_fix, the command and its output in evidence (one line per item, the one place S3 allows pasted content there), never edited, closed by a later change citing its hash. No format bump.",
+    "S3 documents the weekly flags run: one flags-<machine> run per machine and UTC week in the repo --root names, found as the run dated on or after this week's Monday, started by ledger init when there is none, never sealed. It gives the shell that finds or starts the run and appends a flag.",
+    "ledger append refuses a flag missing target, did_instead or suggested_fix, or with no evidence, checked after redaction like spend entries and receipts. verify doesn't check it. No new CLI flag: plain append was one command, and the awkward part (finding the run) is something a --flag shorthand wouldn't fix; IDEAS records a ledger flag command for later."
+  ],
+  "claims": [
+    {
+      "claim": "A flag written with the documented command lands in this week's flags run (a new one the first time, the same one the second time, last week's run ignored), passes ledger verify --base origin/main before and after a merge, has a planted GitHub token in its evidence redacted, and ledger show prints it.",
+      "verdict": "VERIFIED",
+      "check": "the S3 snippet extracted from the spec and run twice in a scratch repo with a bare origin; the second run plants a fake ghp_ token in the evidence",
+      "commit": "0476475",
+      "record": ".changes/2026-11-25-flags-unit-1/checks.txt"
+    },
+    {
+      "claim": "append refuses each malformed flag and accepts a good one, and verify still passes a flag written before the rule; the refusal tests fail without the check.",
+      "verdict": "VERIFIED",
+      "check": "python -m unittest discover -s tests on Python 3.12 (316 tests, OK); test_sink -k flag with check_flag's call removed: 13 failures",
+      "commit": "0476475",
+      "record": ".changes/2026-11-25-flags-unit-1/checks.txt"
+    },
+    {
+      "claim": "Chains written before this change still verify (the entry-format checklist item).",
+      "verdict": "VERIFIED",
+      "check": "ci/run_ledger.py verify in this checkout and with --root on two other local repos holding ledgers from the last tagged release",
+      "commit": "0476475",
+      "record": ".changes/2026-11-25-flags-unit-1/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "agent-kit R45: the beau-mode rule that writes a flag with this command",
+      "source": "agent-kit ROADMAP R45",
+      "why_now": "it waited on this convention, which now exists",
+      "impact": "agents start recording broken skills and pointers instead of silently working around them, so the weekly pass has something to read"
+    }
+  ],
+  "release": {
+    "note": "Agents can raise flags: a lesson entry naming a wrong or missing skill, reference or pointer, kept in one rolling run per machine and week (S3 \"Flag entries\"). ledger append refuses a flag missing its target, fix or evidence."
+  }
+}

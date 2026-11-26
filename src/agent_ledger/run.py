@@ -114,6 +114,25 @@ def check_receipt(entry_type: EntryType, data: Mapping[str, Any] | None) -> None
         parse_receipt(data or {})
 
 
+FLAG_KIND = "flag"
+FLAG_TEXT_KEYS = ("target", "did_instead", "suggested_fix")
+
+
+def check_flag(entry_type: EntryType, data: Mapping[str, Any], evidence: Sequence[str]) -> None:
+    """S3 "Flag entries": a lesson whose data.kind is "flag" names its target, what was done
+    instead and a suggested fix, each non-empty text, and has at least one evidence item.
+    Other keys are allowed, and any other lesson is unchanged."""
+    if entry_type is not EntryType.LESSON or data.get("kind") != FLAG_KIND:
+        return
+    for key in FLAG_TEXT_KEYS:
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            raise EntryError("schema", f"a flag needs data.{key}, a non-empty string "
+                                       f"(a flag has data.target, data.did_instead and data.suggested_fix)")
+    if not evidence:
+        raise EntryError("schema", "a flag needs at least one --evidence item: the command that showed the fault, "
+                                   "and its output")
+
+
 class RedactionRefused(LedgerError):
     """An entry's own text couldn't be confirmed clean after redaction, so it wasn't written."""
 
@@ -170,6 +189,7 @@ def prepare(redactor: Redactor, *, actor: Actor, type: EntryType, summary: str, 
     clean = fields["data"]
     check_imported(clean)
     check_spend(type, clean)
+    check_flag(type, clean, fields["evidence"])
     try:
         check_receipt(type, clean)
     except EntryError as e:

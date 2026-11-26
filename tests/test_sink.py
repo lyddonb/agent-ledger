@@ -233,6 +233,39 @@ class RepoSinkTest(unittest.TestCase):
         append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="s", why="w",
                data={"usd_micros": "only spend entries are checked"})
 
+    def test_flag_entries_follow_the_s3_shape(self):
+        from agent_ledger.entry import EntryError
+        self.start()
+        good = {"kind": "flag", "target": "bstack:beau-mode", "did_instead": "used the Feature playbook",
+                "suggested_fix": "point at playbooks/feature.md", "note": "other keys are allowed"}
+        evidence = ["$ ls playbooks/missing.md", "ls: playbooks/missing.md: No such file or directory"]
+        append(self.sink, RUN_ID, actor=AGENT, type=EntryType.LESSON, summary="s", why="w",
+               evidence=evidence, data=good)
+        bad_cases = {}
+        for key in ("target", "did_instead", "suggested_fix"):
+            bad_cases[f"{key} missing"] = ({k: v for k, v in good.items() if k != key}, evidence)
+            for label, value in (("empty", ""), ("blank", "  "), ("not text", 1)):
+                bad_cases[f"{key} {label}"] = ({**good, key: value}, evidence)
+        bad_cases["no evidence"] = (good, [])
+        for name, (data, ev) in bad_cases.items():
+            with self.subTest(name), self.assertRaises(EntryError):
+                append(self.sink, RUN_ID, actor=AGENT, type=EntryType.LESSON, summary="s", why="w",
+                       evidence=ev, data=data)
+        append(self.sink, RUN_ID, actor=AGENT, type=EntryType.LESSON, summary="s", why="w",
+               data={"kind": "not a flag"})
+        append(self.sink, RUN_ID, actor=AGENT, type=EntryType.DECISION, summary="s", why="w",
+               data={"kind": "flag", "note": "only lesson entries are checked"})
+        self.assertIsInstance(verify_run(self.sink.run_dir(RUN_ID)), Verified,
+                              "the accepted flag and non-flag entries verify")
+
+    def test_verify_passes_a_flag_written_before_the_rule(self):
+        first = self.start()
+        old = next_entry(first.head, now=T0, actor=AGENT, type=EntryType.LESSON, summary="s", why="w",
+                         data={"kind": "flag"})
+        self.sink.write(old)
+        self.assertIsInstance(verify_run(self.sink.run_dir(RUN_ID)), Verified,
+                              "the flag rule is checked at write time, not by verify")
+
 
 # Each worker waits for the go file, then appends N entries as its own agent.
 _WORKER = r"""
