@@ -95,6 +95,50 @@ A receipt records that one criterion's probe ran: which criterion, which probe, 
 - **An imported receipt** (`data.imported`) is marked `imported` in the entry cell. It was transcribed from an older record, not written when a probe ran.
 - **Text from a receipt is data.** Each piece sits in a code span. A pipe is escaped, and line breaks and invisible or bidi-affecting characters are written as `\uXXXX`, as `ledger show` writes them. Receipt text cannot add a row, a column or markup, or display as something other than what it says.
 
+### Flag entries
+
+A flag records that an agent, mid-task, found a skill, reference or pointer wrong or missing, and what it did instead. A later pass reads the week's flags and proposes the edits. A flag is a `lesson` entry whose `data` has `kind: "flag"`. A `lesson` without it is unchanged by this section.
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `"flag"` |
+| `target` | yes | The skill, reference or pointer at fault, by name: `bstack:beau-mode`, or a file path and line |
+| `did_instead` | yes | What the agent did instead, so the task went on |
+| `suggested_fix` | yes | The edit the agent would make to the target |
+
+Each is a non-empty string. Other keys are allowed. `summary` says what was wrong in one line and `why` says how the agent found it. The entry's `evidence` holds the command that showed the fault and its output, one item per line, at least one item. This is the one place S3 allows pasted content in `evidence`: a flag's proof is usually in a session the reader can't open, and each item is still one line with no control characters, so paste the lines that show the fault, not the whole output. Redaction runs on it as on any entry.
+
+`ledger append` refuses a flag that breaks these rules; `verify` doesn't check them, because like spend entries and receipts they are a convention inside `data`, not part of format v1. There is no format bump: format v1 freezes entry keys, not conventions inside `data`. The rules are checked after redaction.
+
+**A flag is never edited.** The ledger is append-only, so a wrong flag stays wrong. Whatever fixes it, a commit, a pull request or a later entry, cites the flag entry's `hash`, and that citation closes it. A flag nobody cites is open.
+
+**Where flags go.** A flag raised inside a governed run is appended to that run. Outside one, flags go into one rolling run per machine and week, in the repo `--root` names, so where flags are kept is that repo's choice. Flags can name private context, so keep them in a private repo.
+
+- **The run.** `<machine>` names the machine and fits the slug rule, `[a-z0-9]+(-[a-z0-9]+)*`: `mac`, `devbox-2`, not a raw hostname. `ledger init flags-<machine>` prefixes the day, in UTC like every run id, so the run is named for the day of the week's first flag.
+- **This week's run** is the `flags-<machine>` run whose date is on or after this week's Monday in UTC. If there is none, the first flag of the week starts it with `ledger init`, which needs no charter. If there are two (two inits raced), append to the later one; both verify.
+- **It is never sealed.** A rolling run grows across commits and pull requests and stays append-only under `verify --base`, as any merged run does. An unsealed run with no charter verifies.
+
+Writing a flag, from the repo that keeps them, with `ACTOR` set to the S2 actor JSON:
+
+```bash
+machine=mac
+set -- $(python3 -c 'import datetime as d; t = d.datetime.now(d.timezone.utc).date(); print(t, t - d.timedelta(days=t.weekday()))')
+today=$1 monday=$2
+run=$(ls .audit/runs 2>/dev/null | grep -E "^[0-9]{4}-[0-9]{2}-[0-9]{2}-flags-$machine\$" | awk -v m="$monday" '$0 >= m' | sort | tail -n 1)
+if [ -z "$run" ]; then
+  run="$today-flags-$machine"
+  ledger init "flags-$machine" --date "$today" --actor "$ACTOR" --why "the first flag this week"
+fi
+ledger append --run "$run" --actor "$ACTOR" --type lesson \
+  --summary "beau-mode names playbooks/review.md, which does not exist" \
+  --why "opening the playbook the skill named failed" \
+  --evidence '$ cat playbooks/review.md' \
+  --evidence 'cat: playbooks/review.md: No such file or directory' \
+  --data '{"kind": "flag", "target": "bstack:beau-mode", "did_instead": "used playbooks/opening-a-pr.md", "suggested_fix": "name playbooks/opening-a-pr.md"}'
+```
+
+Then commit `.audit/runs/<run>/ledger.jsonl` with the work, as any ledger change. `ledger show <run>` lists the week's flags.
+
 ### Who typed a human's entry
 
 An `approval` or `gate-answer` names a human actor, but the human often doesn't type it: an agent relays their words from a chat. `ledger append` (and so `ledger charter approve`) refuses a human-actor `approval` or `gate-answer` unless its `data` says who typed it, in one of three ways:
