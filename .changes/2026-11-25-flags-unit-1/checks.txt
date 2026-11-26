@@ -1,0 +1,38 @@
+$ bash check.sh  # at 0476475: the S3 "Writing a flag" snippet, extracted from the spec, run twice in a scratch repo with a bare origin and last week's flags run present; scratch path shown as <scratch>
+== 1. first flag this week: the documented command, as the spec has it
+started 2026-11-26-flags-mac: <scratch>/flagcheck/repo/.audit/runs/2026-11-26-flags-mac/ledger.jsonl seq 1 02e492dd8641b6b928f36d152f70090731b782450bd6c19e0fd8669ff1c1ee38
+appended 2026-11-26-flags-mac seq 2 346eb1616ddacec48935446c4c4be162386b274096205834a7cbbb857af676dc
+ok: 2 runs, 0 sealed, 0 indexed; merged lines unchanged since origin/main (71f7a7720e6d)
+== 2. merge, then a second flag with a planted token in its evidence
+appended 2026-11-26-flags-mac seq 3 bd5c984e07be861273156ea405779887c9006bdbcfed35f8adebff367f9749ee
+ok: 2 runs, 0 sealed, 0 indexed; merged lines unchanged since origin/main (9cede3808cf2)
+== runs:
+2026-11-16-flags-mac
+2026-11-26-flags-mac
+== flags in this week's run: 2026-11-26-flags-mac
+raw token in ledger lines: 0
+redaction markers:    1 REDACTED:github_token
+seq 3 evidence ['$ cat playbooks/review.md', 'cat: playbooks/review.md: No such file or directory; GH_TOKEN=[REDACTED:github_token]']
+data {'did_instead': 'used playbooks/opening-a-pr.md', 'kind': 'flag', 'suggested_fix': 'name playbooks/opening-a-pr.md', 'target': 'bstack:beau-mode'}
+== ledger show
+seq  ts                    type    actor                    summary
+1    2026-11-26T04:04:40Z  state   agent:claude-code@check  Run started
+                                                            why: the first flag this week
+2    2026-11-26T04:04:40Z  lesson  agent:claude-code@check  beau-mode names playbooks/review.md, which does not exist
+                                                            why: opening the playbook the skill named failed
+3    2026-11-26T04:04:41Z  lesson  agent:claude-code@check  beau-mode names playbooks/review.md, which does not exist
+                                                            why: opening the playbook the skill named failed
+2026-11-26-flags-mac: 3 entries, verified; head bd5c984e07be861273156ea405779887c9006bdbcfed35f8adebff367f9749ee
+
+$ uv run --python 3.12 python -m unittest discover -s tests  # at 0476475
+Ran 316 tests in 55.414s
+
+OK (skipped=1)
+
+$ (cd tests && python -m unittest test_sink -k flag)  # at 19e2d8f with check_flag's call in prepare() removed
+13 failures (each bad case in test_flag_entries_follow_the_s3_shape, one subTest each)
+
+$ ci/run_ledger.py verify  # at 0476475, this checkout, then two other local repos with ledgers written by the last tagged release
+ok: 3 runs, 3 sealed, 3 indexed
+ok: N runs, N sealed, N indexed
+ok: N runs, N sealed, N indexed
