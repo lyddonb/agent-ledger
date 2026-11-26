@@ -10,7 +10,7 @@ The full plan, with all milestones and the reasoning, is in the "Governed agent 
 | M1. Quality and security | Charter fields for the spec ladder and security lens; review entries | M0's gate passes |
 | M2. Enforcement | `ledger charter render --audio/--video`; spend calibration from recorded runs | M1's gate passes |
 | M3. Harness lab | A second package, `harness-lab`: test agent-setup changes on a project's own tasks (spec S6 in the plan doc). Score human cost (interventions, review time) as well as pass rate, so it doesn't optimize for autonomy alone ([notes](docs/notes/steering-beyond-automation.md)). Its first slice is M3 unit 1, below | One app has a verification skill: met 2026-11-18 by `verify-ledger` (pull request 23). Unit 1 opens before M1 and M2 (H8, answered 2026-11-21) |
-| **Flags** | A convention for agent-raised flags: a `lesson` entry an agent appends mid-task when a skill or reference was wrong, kept in one rolling run per machine and week. See the Flags unit below | agent-kit R45 needs it. No format change |
+| **Flags** | A convention for agent-raised flags: a `lesson` entry an agent appends mid-task when a skill or reference was wrong, kept in one rolling run per machine and week (S3 "Flag entries"), from [pull request 45](https://github.com/lyddonb/agent-ledger/pull/45) | Done |
 | M4. Collaboration and compliance | `s3-object-lock` and `external` sinks; role-based approvers | A teammate or an audit needs it |
 
 ## M0 units
@@ -87,5 +87,4 @@ in the same bump (IDEAS).
 **Done when:** a flag written with the documented command lands in a weekly flags run, passes
 `ledger verify --base origin/main`, has a planted secret in its evidence redacted, and
 `ledger show` prints it.
-**Why not done:** no agent raises flags yet, so nothing needed the convention.
-**Prioritize when:** now. agent-kit R45 waits on it.
+**Status:** Done, 2026-11-25, in [pull request 45](https://github.com/lyddonb/agent-ledger/pull/45). `ledger append` writes flags; no `--flag` shorthand (IDEAS, `ledger flag`). agent-kit R45 can start.
