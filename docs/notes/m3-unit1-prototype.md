@@ -241,7 +241,7 @@ Every run here also passed `--settings hooks.json` with a `PreToolUse` hook on `
 
 Two more facts from the hook payloads and the filesystem:
 
-- **`--no-session-persistence` leaves an empty folder.** Each run created its folder under `~/.claude/projects/`, but no transcript file in it (checked on pilot 1). `book-skills` has nothing to book. The hook payload still names a `transcript_path` there, which does not exist.
+- **`--no-session-persistence` leaves an empty folder.** Each run created its folder under `~/.claude/projects/`, holding only an empty `memory/` folder and no transcript file (checked on all 8 runs). `book-skills` has nothing to book. The hook payload still names a `transcript_path` there, which does not exist.
 - **The runs inherit the parent session's environment.** These runs started from a Claude desktop session and inherited its `CLAUDE_*` variables (`CLAUDE_EFFORT`, `CLAUDE_CODE_ENTRYPOINT` and about 30 more). Every `init` event listed five built-in `cc-plugin-*` plugins and their skills beside the two scratch plugins. That these come from the desktop environment is inferred, not tested. The runner should start `claude` from a scrubbed environment (`env -i` with `PATH` and `HOME`) so a case behaves the same from a terminal, a desktop session and CI.
 
 ### Two hermeticity bugs the first pass did not hit
