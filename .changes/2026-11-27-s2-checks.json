@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "goal": "Give every verification check a mode (off, observe or enforce) in the one policy file, so a new check can ship logging what it would have stopped before anyone lets it block work (agent-kit R32, run 2026-11-27-r32-hook-gates).",
+  "changed": [
+    "S2 gains a `checks:` key: a block map of check id to off, observe or enforce. The highest mode any policy file sets wins, a missing id is observe, and an unknown id is an error.",
+    "S2 names the known ids (commit-gate, stop-checks, spec-drift, receipts, test-guard), the rule that an enforced check may let an action through after two stops in one session and record why (a gate never does), and where an observe log goes: a would-block lesson in the machine's weekly flags run.",
+    "S2's agentfiles changes and acceptance criteria gain the merge, the policy check and a test for them. No ledger code changes: the ledger reads only security.redact_patterns from a policy file."
+  ],
+  "claims": [
+    {
+      "claim": "The ledger's policy reader still reads redact patterns from a policy file that has a checks: block, and ignores the block.",
+      "verdict": "VERIFIED",
+      "check": "read_policy_patterns on a copy of a synced ~/.agents/policy.yaml with a checks: block appended, once with redact_patterns: [] and once with one pattern",
+      "commit": "af9a3cc",
+      "record": ".changes/2026-11-27-s2-checks/reader.txt",
+      "remaining": "agentfiles doesn't accept the key yet; that is the run's next unit."
+    },
+    {
+      "claim": "The test suite passes with the spec change.",
+      "verdict": "VERIFIED",
+      "check": "uv run --no-project --python 3.12 python -m unittest discover -s tests (the repo needs 3.10 or newer)",
+      "commit": "af9a3cc",
+      "record": ".changes/2026-11-27-s2-checks/tests.txt",
+      "remaining": "CI on the pull request."
+    }
+  ],
+  "next": [
+    {
+      "item": "agentfiles parses and merges checks: and writes it at sync",
+      "source": "run 2026-11-27-r32-hook-gates unit 2 (agent-kit R32)",
+      "why_now": "Until agentfiles accepts the key, a profile can't set a mode and bstack's hooks read only the default.",
+      "impact": "Beau moves a check from observe to enforce with one profile line and agentfiles sync."
+    }
+  ],
+  "release": {
+    "note": "The policy spec gives verification checks a mode: off, observe or enforce. New checks ship in observe."
+  }
+}
