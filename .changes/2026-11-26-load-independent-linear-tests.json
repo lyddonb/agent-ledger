@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "goal": "Make agent-ledger's two linear-time tests tell a quadratic regression from a busy machine, so a red local suite means a real problem (the 1.3.0 release recorded its suite as inconclusive because of them).",
+  "changed": [
+    "test_url_pattern_is_linear_on_dotted_runs and test_a_long_line_of_placeholders_scans_in_linear_time compare CPU time at two sizes 8x apart (tests/helpers.py cpu_growth) and fail above 20x growth, instead of asserting 2 s and 5 s of wall-clock time.",
+    "The placeholder test's input adds the policy pattern [A-Z]{8}, which matches inside every placeholder; with built-in patterns only, the old quadratic leftover check ran as fast as the new one, so the test could not catch it."
+  ],
+  "claims": [
+    {
+      "claim": "Both old tests fail on a busy machine with unchanged code.",
+      "verdict": "VERIFIED",
+      "check": "20 runs of both tests on origin/main while the suite loops in parallel: pass=0 fail=20 at load 109 to 128",
+      "commit": "b64bbab",
+      "record": ".changes/2026-11-26-load-independent-linear-tests/checks.txt"
+    },
+    {
+      "claim": "Each new test fails on the quadratic code it guards.",
+      "verdict": "VERIFIED",
+      "check": "20 runs each under suite load with the url_password regex reverted (fail=20, 52x to 60x growth) and with _leftover reverted to the per-character check (fail=20, 53x growth)",
+      "commit": "af4d7e1",
+      "record": ".changes/2026-11-26-load-independent-linear-tests/checks.txt"
+    },
+    {
+      "claim": "Both new tests pass 20 times in a row while the full suite runs in parallel.",
+      "verdict": "VERIFIED",
+      "check": "20 runs of both tests on Python 3.12 with 8 full-suite loops and 160 busy-loop processes in parallel: pass=20 fail=0, load average 219 at the end",
+      "commit": "af4d7e1",
+      "record": ".changes/2026-11-26-load-independent-linear-tests/checks.txt"
+    },
+    {
+      "claim": "The full suite passes.",
+      "verdict": "VERIFIED",
+      "check": "cd tests && python3.12 -m unittest discover -s . (316 tests, OK, 1 skipped)",
+      "commit": "af4d7e1",
+      "record": ".changes/2026-11-26-load-independent-linear-tests/checks.txt"
+    }
+  ],
+  "next": [],
+  "release": {
+    "note": "Tests only: the linear-time tests for the URL pattern and the placeholder scan now hold on a busy machine, and the placeholder test now reaches the quadratic check it guards."
+  }
+}

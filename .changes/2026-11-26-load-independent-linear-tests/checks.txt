@@ -1,0 +1,52 @@
+Load-independent linear-time tests: checks run on 2026-11-26, macOS, 10 cores.
+
+The two test IDs:
+  T1 = test_redact.EscapingTest.test_url_pattern_is_linear_on_dotted_runs
+  T2 = test_scan.ScanTest.test_a_long_line_of_placeholders_scans_in_linear_time
+
+"Under load" means the test runs while N copies of the full suite
+(unittest discover -s tests) loop in the background, on a machine that
+was already busy with other work. Load averages are `sysctl vm.loadavg`
+(1, 5, 15 min) at the end of each run.
+
+1. Before: origin/main (b64bbab), wall-clock limits, 20 runs of T1 and T2 together
+   pass=0 fail=20 load={ 109.06 113.86 127.54 }
+   T1 failed in every run: 2.07 to 6.40 s against its 2.0 s limit.
+   T2 also failed where its time was printed: 13.05 and 13.11 s against its 5.0 s limit.
+   (The runner printed the first two failure lines per run, so most runs show only T1.)
+
+2. Which input reaches the old quadratic leftover check (CPU ms, Redactor().find on
+   "[REDACTED:anthropic_key] " * n):
+     n      new, built-ins   new, +[A-Z]{8}   old, built-ins   old, +[A-Z]{8}
+     500     9.5              10.5              9.1              109.6
+     1000   18.3              19.1             17.4              403.4
+     2000   35.5              36.5             34.4             1477.0
+   With built-in patterns only, the old code is as fast as the new: the old test
+   could not catch the regression it was written for.
+
+3. Growth ratio (CPU time at 8x the input over 1x, fastest of 3 interleaved runs),
+   sampled at load { 95.41 110.59 126.06 }:
+     T1 input, real code    40 samples  min 6.95  median 8.14  max 9.61
+     T1 input, old regex     5 samples  min 56.63 median 59.27 max 60.71
+     T2 input, real code    40 samples  min 7.24  median 8.39  max 9.49
+     T2 input, old check     5 samples  min 50.72 median 53.78 max 58.46
+   Cutoff: 20 (near the geometric mean of 8 and 64).
+
+4. Mutants through the real tests, 20 runs each under load (2 suite loops each,
+   run at the same time as check 5):
+   mut-url  (url_password regex reverted to \b[a-z][a-z0-9+.\-]*://...):
+     T1 pass=0 fail=20 load={ 72.16 72.02 95.72 }   e.g. "8x the dotted run took 59.6x the CPU time"
+   mut-scan (_leftover reverted to the per-character any() over placeholder spans):
+     T2 pass=0 fail=20 load={ 48.77 64.97 91.06 }   e.g. "8x the placeholders took 53.6x the CPU time"
+
+5. New tests on the real code, 20 runs of T1 and T2 under load:
+   Python 3.9, 4 suite loops, alongside check 4:
+     pass=20 fail=0 load={ 46.00 74.08 106.84 }
+   Python 3.12, 8 suite loops:
+     pass=20 fail=0 load={ 37.37 56.10 84.82 }
+   Python 3.12, 8 suite loops plus 160 busy-loop processes (yes > /dev/null):
+     load before tests: { 141.72 80.67 90.87 }
+     pass=20 fail=0 load={ 218.78 131.11 109.58 }
+
+6. Full suite: cd tests && python3.12 -m unittest discover -s .
+   Ran 316 tests  OK (skipped=1)
