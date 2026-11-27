@@ -35,3 +35,15 @@ exit 1
 
 $ python -m unittest discover -s tests   # Python 3.12
 Ran 359 tests ... OK (skipped=1)
+
+# Cross-family review (gpt-5.6-sol-high through cursor-agent) of 74dc42b: nine findings.
+# Fixed in the next commit, each with a test that fails without its fix (checked by taking each fix out):
+#   a TMPDIR inside the skill repo or case folder is refused; a dependency named by a path is refused; staging git
+#   ignores the caller's GIT_* variables; an existing --keep folder is refused before claude starts; a folder the
+#   agent locked is unlocked and deleted, with a warning if deletion fails; a setup error on a later run keeps the
+#   earlier runs' verdicts (exit 1 after a FAIL); the cost total says how many runs had no cost.
+# Not changed: "a run can PASS without the skill being used" is the case's to check, and the README now shows a
+#   calls check on the Skill call; "an installed bstack could stand in for the staged copy" doesn't happen under
+#   --setting-sources project, whose init events listed only the staged plugins and built-ins (four kept streams).
+$ python -m unittest discover -s tests   # Python 3.12, after the fixes
+Ran 363 tests ... OK (skipped=1)

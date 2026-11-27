@@ -24,10 +24,10 @@
       "record": ".changes/2026-11-26-harness-lab-runner/checks.txt"
     },
     {
-      "claim": "Against a fake claude, the runner passes only the listed variables, names no variant in any path, stages one commit with no fixture .git, loads dependencies, refuses a missing dependency before starting claude, and turns a non-zero exit, a timeout or an unloaded dependency into UNJUDGEABLE.",
+      "claim": "Against a fake claude, the runner passes only the listed variables, names no variant in any path, stages one commit with no fixture .git, loads dependencies, refuses a missing dependency, a dependency named by a path, an existing --keep folder and a TMPDIR inside the skill repo before starting claude, ignores the caller's GIT_* variables while staging, deletes a folder the agent locked, and turns a non-zero exit, a timeout or an unloaded dependency into UNJUDGEABLE.",
       "verdict": "VERIFIED",
-      "check": "python -m unittest tests.test_harness_lab_runner (12 tests) and the full suite (359 tests, OK) on Python 3.12",
-      "commit": "74dc42b",
+      "check": "python -m unittest tests.test_harness_lab_runner (16 tests) and the full suite (363 tests, OK) on Python 3.12, after the review fixes",
+      "commit": "b2f276d",
       "record": ".changes/2026-11-26-harness-lab-runner/checks.txt"
     }
   ],
