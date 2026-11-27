@@ -20,6 +20,11 @@ See the charter's Plan section. In short: (1) entry model, hashing and verify; (
 ## M3 units
 
 ### M3 unit 1. Hard rules as tool-call checks
+**Status:** Prototype done (2026-11-21 and 2026-11-26, [notes](docs/notes/m3-unit1-prototype.md)).
+Feature not started. The prototype found the assertion list below too narrow: two of the three
+first cases need a check on the fixture after the run, not only on tool calls. The proposed
+Feature PRs are in the notes, under "Proposed Feature PRs". H10 re-asks H9 with a cost per run.
+
 The first slice of Harness lab. It comes from Akshay's "[Our Claude skills and guidance, six months later](https://akshay.co/posts/our-claude-skills-and-guidance-six-months-later/)"
 (read 2026-11-19), where skills that passed lint and review still did badly in use. The plan
 across repos is in [agent-kit's roadmap](https://github.com/lyddonb/agent-kit/blob/main/ROADMAP.md),
