@@ -113,7 +113,7 @@ ledger receipts RUN_ID
 ```
 
 - **Set `PYTHONPATH` outside the probe, or install agent-ledger in that `python3`.** `receipt.py` records everything after `--` as the probe, and the probe goes into the ledger. `env PYTHONPATH=... python3 ...` there would write this machine's paths into the repo. The probe inherits `receipt.py`'s environment.
-- **Pass `--skill-root .`.** The receipt names the commit of the repo `receipt.py` runs in, so the skill under test must be that repo. The runner's first line says which commit it tested (`CASE probes P1-C1; skill root . at SHA`), and `receipt.py` copies the output into the receipt's evidence file, so a reader can check the two match.
+- **Pass `--skill-root .`.** The receipt names the commit of the repo `receipt.py` runs in, so the skill under test must be that repo. In a git repo the runner copies only the plugin files git doesn't ignore, and `receipt.py` records any uncommitted or untracked change as `INCONCLUSIVE`, so a `VERIFIED` receipt's commit holds the code that ran. The runner's first line says which commit it tested (`CASE probes P1-C1; skill root . at SHA`), and `receipt.py` copies the output into the receipt's evidence file, so a reader can check the two match.
 - **`--runs 3` gives one receipt for three runs.** It is `VERIFIED` only when all three passed.
 - **Match the criterion by hand.** `receipt.py` takes the criterion from `--spec` and `--criterion`, not from the case. The runner's first line names the case's, in the evidence beside the receipt's.
 
@@ -121,7 +121,7 @@ What each verdict becomes:
 
 | Runner | Exit | Receipt |
 |---|---|---|
-| `PASS` | 0 | `VERIFIED` |
+| `PASS` | 0 | `VERIFIED`, or `INCONCLUSIVE` when the skill repo has uncommitted changes |
 | `FAIL` | 1 | `NOT VERIFIED`, probe `(exit 1)` |
 | `UNJUDGEABLE` | 2 | `NOT VERIFIED`, probe `(exit 2)` |
 
