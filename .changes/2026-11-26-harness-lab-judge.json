@@ -26,8 +26,8 @@
     {
       "claim": "The 31 harness-lab tests pass on hand-written streams, and each of ten edits that break a promise in the README makes at least one of them fail.",
       "verdict": "VERIFIED",
-      "check": "python -m unittest tests.test_harness_lab on Python 3.12; the eight edits made one at a time in a copy of src/",
-      "commit": "e224086",
+      "check": "python -m unittest tests.test_harness_lab on Python 3.12; the ten edits made one at a time in a copy of src/ (eight at e224086, two more after the review fixes)",
+      "commit": "5b450d8",
       "record": ".changes/2026-11-26-harness-lab-judge/checks.txt"
     }
   ],
