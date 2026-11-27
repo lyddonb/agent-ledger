@@ -26,3 +26,8 @@ Context and reasoning: [docs/notes/intent-over-steps.md](docs/notes/intent-over-
 - **`ledger flag`**: one command that finds this week's `flags-<machine>` run, starts it when there is none, and appends the flag. Flags unit 1 tried plain `ledger append` and kept it: the append is one command, and the awkward part is finding the run (a few lines of shell in S3), which a `--flag` shorthand on `append` wouldn't remove. Prioritize when agents following agent-kit R45 get the lookup wrong. It is a new command, so the `public-api` gate.
 - **Fix proofs**: a verification entry that cites the probe failing on the base commit and passing on the fix commit, so "the fix counts only when the old code fails" is checkable from the ledger.
 
+
+## From agent-kit's R32 run reflect (2026-11-27)
+
+- **`charter approve` checks the human actor**: run `2026-11-27-r32-hook-gates` recorded its approval with a bare login as the id. `charter approve` records an approval once and refuses a second, so the slip stood. Have it read `identity.human` from the policy and refuse an actor whose `on_behalf_of` isn't `identity.human` or whose id isn't that value without `@github`, or add a `--dry-run` that prints the entry it would append. Changing what the command accepts is the `public-api` gate.
+- **The tests fail fast on an old Python**: the system `python3` on Beau's Mac is 3.9, and the suite under it gave one confusing error before a rerun under `uv run --python 3.12` passed. A check at the top of the test entry point (and the Makefile or CI target) that exits with "needs Python 3.10 or newer; run it with uv run --python 3.12" would make the cause plain.
