@@ -2,6 +2,7 @@
 import hashlib
 import random
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -74,3 +75,24 @@ def resign(line: bytes, **changes) -> bytes:
     obj.pop("hash")
     obj["hash"] = hashlib.sha256(canonical_bytes(obj)).hexdigest()
     return canonical_bytes(obj) + b"\n"
+
+
+GROWTH_STEP = 8
+GROWTH_LIMIT = 20
+
+
+def cpu_growth(work, small, large, rounds: int = 3) -> float:
+    """How much longer work(large) takes than work(small), in CPU time, best of `rounds`
+    interleaved runs. CPU time leaves out time spent waiting for a core, so a busy machine
+    doesn't change the answer. With large GROWTH_STEP times small, linear code gives about
+    GROWTH_STEP and quadratic code about its square; GROWTH_LIMIT sits between the two."""
+    work(small)
+    best_small = best_large = float("inf")
+    for _ in range(rounds):
+        start = time.process_time()
+        work(small)
+        best_small = min(best_small, time.process_time() - start)
+        start = time.process_time()
+        work(large)
+        best_large = min(best_large, time.process_time() - start)
+    return best_large / best_small
