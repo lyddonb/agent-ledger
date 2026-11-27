@@ -273,7 +273,7 @@ From the Multi-phase plan playbook. Each is one PR, in this order, and each name
 4. **The three first cases, in agent-kit.** One agent-kit PR per case, each with its fixture, its spec criterion and a recorded pass on main three times plus a fail on a rule-removed copy. The `qualitydirector` and `receipt.py` cases exist as prototypes. The flaky-test case does not.
 5. **Cursor, later.** An adapter for `cursor-agent`'s `tool_call` events is small (section 2). It waits until a Cursor run can be made hermetic. Not part of unit 1's Done when.
 
-Running the cases in agent-kit's CI waits on H10.
+The cases stay local (H10, answered 2026-11-26). Running them in agent-kit's CI is asked again once Feature PR 2's runner has 20 or more runs per case and a flake rate.
 
 ### Spend, second pass
 
