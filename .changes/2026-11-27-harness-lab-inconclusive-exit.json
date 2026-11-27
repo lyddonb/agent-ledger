@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "goal": "harness-lab's README says what verify-work's receipt.py does with an UNJUDGEABLE run now that receipt.py takes --inconclusive-exit (agent-kit PR 135, bstack 0.52.0).",
+  "changed": [
+    "The receipt.py call in the README's Recording a receipt passes --inconclusive-exit 2, and a new bullet says why and which bstack it needs.",
+    "The verdict table: UNJUDGEABLE, exit 2, becomes INCONCLUSIVE, probe (exit 2), with the flag, and is still NOT VERIFIED without it.",
+    "The paragraph under the table no longer says receipt.py turns every non-zero exit into NOT VERIFIED; it gives the entry's why with the flag, the old behavior without it, and keeps that neither verdict ticks the box.",
+    "docs/notes/m3-unit1-prototype.md, Proposed Feature PRs item 3, notes that the gap it describes is closed by the flag.",
+    "No code changed: agent_ledger's receipt parsing already accepts INCONCLUSIVE with any exit code."
+  ],
+  "claims": [
+    {
+      "claim": "Around the real receipt-before-tick case, receipt.py --inconclusive-exit 2 wrote P1-C1 VERIFIED for a passing run and P1-C1 INCONCLUSIVE for an UNJUDGEABLE run (exit 2), with why 'probe exited 2; exit 2 says nothing (--inconclusive-exit)'; the same UNJUDGEABLE run without the flag wrote NOT VERIFIED. ledger receipts showed each with (exit N), ledger verify passed, and every receipt had dirty: false. The three runs cost $0.255.",
+      "verdict": "VERIFIED",
+      "check": "receipt.py [--inconclusive-exit 2] -- python3 -m harness_lab run cases/receipt-before-tick/case.json --skill-root . --runs 1 [--budget-usd 0.01], each in its own ledger run, then ledger receipts and ledger verify",
+      "commit": "48865bf",
+      "record": ".changes/2026-11-27-harness-lab-inconclusive-exit/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "Feature PR 4: the three first cases in agent-kit, each recorded with --inconclusive-exit 2",
+      "source": "ROADMAP M3 unit 1; docs/notes/m3-unit1-prototype.md, Proposed Feature PRs item 4",
+      "why_now": "the receipt call is now the one the cases should copy",
+      "impact": "ledger receipts shows a run that could not be judged as INCONCLUSIVE, so a broken setup no longer reads as a broken skill"
+    }
+  ],
+  "release": {
+    "note": "Docs only: harness-lab's README now records a case with receipt.py --inconclusive-exit 2, so an UNJUDGEABLE run is INCONCLUSIVE instead of NOT VERIFIED. No ledger command changed."
+  }
+}
