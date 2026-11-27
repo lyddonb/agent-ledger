@@ -21,7 +21,8 @@ See the charter's Plan section. In short: (1) entry model, hashing and verify; (
 
 ### M3 unit 1. Hard rules as tool-call checks
 **Status:** Prototype done (2026-11-21 and 2026-11-26, [notes](docs/notes/m3-unit1-prototype.md)).
-Feature not started. The prototype found tool-call assertions alone too narrow: two of the three
+Feature PR 1 of 5 done: the case format and the judge, in [`src/harness_lab`](src/harness_lab/README.md).
+PR 2, the runner, is next. The prototype found tool-call assertions alone too narrow: two of the three
 first cases need a check on the fixture after the run. Beau accepted the `after` assertion kind
 on 2026-11-26 ("Accept after"), and the What line below includes it. The Feature lives in the
 `harness-lab` package, not a `ledger eval` subcommand, so `ledger`'s CLI contract stays as
