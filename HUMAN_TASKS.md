@@ -8,7 +8,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | H2 | Create the GitHub repo and push | Done; public since 2026-11-14 |
 | H3 | Turn on Actions and protect `main` (no force-push) | Done 2026-11-08: Actions on; main requires a PR and the three test checks, admins included, no force-push or deletion. |
 | H4 | Approve the M0 charter | Done 2026-11-08 |
-| H5 | Pick the project for the M0 gate run | Project chosen 2026-11-27: curator. The task is still to pick, with unit 9 |
+| H5 | Pick the project for the M0 gate run | Done 2026-11-27: curator, P6 DV-02 and DV-03 |
 | H6 | Allow only merge commits on `main` (turn off squash and rebase merging) | Done 2026-11-10: squash and rebase merging off, merge commits on |
 | H7 | Require the `ledger-verify` check on `main` | Done 2026-11-14: required with the three test checks, strict |
 | H8 | Decide whether M3 unit 1 opens before M1 and M2 | Done 2026-11-21: yes, it opens early |
@@ -35,11 +35,15 @@ Approved as written. Recorded in [bootstrap-notes.md](.audit/runs/2026-10-18-m0-
 
 Read [.audit/runs/2026-10-18-m0-foundation/charter.md](.audit/runs/2026-10-18-m0-foundation/charter.md). Edit anything (budget, staffing, units, open questions), then say "approved" in chat or commit the edited charter on `main`. Work starts only after that.
 
-### H5. Pick the gate-run project — Project chosen
+### H5. Pick the gate-run project — Done
 M0's gate is one real tier 2 run in a real project. Choose which project and task, ideally one with a `verify-<app>` skill.
 **Answer (2026-11-27):** curator. Beau's words: "Let's do `curator`". It has a `verify-curator`
 skill. Still open: which curator task the run does. Unit 9 proposes one from curator's roadmap
 and Beau confirms it before the run starts.
+**Task (2026-11-27):** P6 DV-02 and DV-03 in curator's deep dives plan: the dive's estimate and
+spend gate, then the brief with every claim cited. Beau's words: "DV-02 and DV-03". The run
+starts once DV-01 merges and Beau approves its charter. The other option was DV-02 to DV-05;
+it was left out because its estimate sits near the tier 2 ceiling.
 
 ### H6. Allow only merge commits — Done 2026-11-10
 A seal names a commit on the PR branch. A squash or rebase merge rewrites the branch, so that commit never reaches `main`, and `ledger verify` reports `seal-commit` on every sealed run merged that way. In the repo's Settings, under Pull Requests, untick "Allow squash merging" and "Allow rebase merging", or run:
