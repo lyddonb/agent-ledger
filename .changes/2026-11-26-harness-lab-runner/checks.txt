@@ -1,0 +1,37 @@
+# At 74dc42b. Python 3.12.12, claude 2.1.325 (Claude Code). Scratch paths shown as <scratch>, tool call ids as toolu_… .
+# The receipt.py case from the prototype's second pass: its fixture without .git, its prompt, a calls check on
+# receipt.py --criterion C1 and an after check (a script beside the case, through $CASE_DIR) that a ticked C1 has a
+# VERIFIED receipt. <scratch>/kit is agent-kit main at 29d9f39 (bstack 0.49.0 and principles); kit-norule is a copy
+# with the receipt rule removed. Both ran at the same time, at a load average of 3 to 4.
+$ python -m harness_lab run receipt/case.json --skill-root <scratch>/kit --runs 2 --keep kept-main
+run 1/2  PASS  receipt-before-tick: 2 assertions passed
+  pass  calls       runs-receipt: ran: toolu_…, toolu_…, toolu_…
+  pass  after       ticked-implies-verified: exit 0
+  $0.184  32,487 tokens  29.4 s  load 3 to 3
+run 2/2  PASS  receipt-before-tick: 2 assertions passed
+  pass  calls       runs-receipt: ran: toolu_…, toolu_…
+  pass  after       ticked-implies-verified: exit 0
+  $0.190  33,394 tokens  28.5 s  load 3 to 4
+PASS  receipt-before-tick: 2 passed, 0 failed, 0 unjudgeable of 2; $0.374 in all
+exit 0
+$ python -m harness_lab run receipt/case.json --skill-root <scratch>/kit-norule --runs 2 --keep kept-norule
+run 1/2  FAIL  receipt-before-tick: failed: runs-receipt, ticked-implies-verified
+  FAIL  calls       runs-receipt: no call matched
+  FAIL  after       ticked-implies-verified: exit 1
+  $0.146  28,306 tokens  19.1 s  load 3 to 3
+run 2/2  FAIL  receipt-before-tick: failed: runs-receipt, ticked-implies-verified
+  FAIL  calls       runs-receipt: no call matched
+  FAIL  after       ticked-implies-verified: exit 1
+  $0.183  30,972 tokens  32.9 s  load 3 to 4
+FAIL  receipt-before-tick: 0 passed, 2 failed, 0 unjudgeable of 2; $0.329 in all
+exit 1
+
+# The four kept streams: 'norule' appears 0 times in each; init lists bstack and principles (plus four built-in
+# cc-plugin-* plugins) and a cwd of <tmp>/harness-XXXXXXXX/repo.
+
+# Scrubbed environment, two Haiku probes ($0.0007 each):
+#   env -i PATH HOME claude -p ...       -> result 'Not logged in · Please run /login', five cc-plugin-* plugins in init
+#   env -i PATH HOME USER claude -p ...  -> success
+
+$ python -m unittest discover -s tests   # Python 3.12
+Ran 359 tests ... OK (skipped=1)
