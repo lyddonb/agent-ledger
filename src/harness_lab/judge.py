@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
@@ -57,9 +58,10 @@ def judge(case: Case, run: Run, after_exits: Mapping[str, int], required_plugins
 
 def run_after_checks(case: Case, fixture: Path, timeout: float = 120) -> dict[str, int]:
     """Run each `after` command with `fixture` as its working folder and return its exit code."""
+    env = {**os.environ, "CASE_DIR": str(case.directory.resolve())}
     exits = {}
     for check in case.after:
-        done = subprocess.run(check.run, shell=True, cwd=fixture, stdin=subprocess.DEVNULL,
+        done = subprocess.run(check.run, shell=True, cwd=fixture, env=env, stdin=subprocess.DEVNULL,
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
         exits[check.id] = done.returncode
     return exits
