@@ -1,0 +1,4 @@
+$ uv run --no-project --python 3.12 python -m unittest discover -s tests
+Ran 366 tests in 118.202s
+
+OK (skipped=1)

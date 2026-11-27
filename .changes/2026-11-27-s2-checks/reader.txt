@@ -1,0 +1,3 @@
+cp ~/.agents/policy.yaml + checks block; read_policy_patterns on it:
+patterns: []
+patterns with one: ['fake_[a-z]{8}']
