@@ -23,9 +23,11 @@ See the charter's Plan section. In short: (1) entry model, hashing and verify; (
 **Status:** Prototype done (2026-11-21 and 2026-11-26, [notes](docs/notes/m3-unit1-prototype.md)).
 Feature not started. The prototype found tool-call assertions alone too narrow: two of the three
 first cases need a check on the fixture after the run. Beau accepted the `after` assertion kind
-on 2026-11-26 ("Accept after"), and the What line below includes it. Still open: where the
-Feature lives (`harness-lab` or a `ledger eval` subcommand, the notes recommend `harness-lab`)
-and H10. The proposed Feature PRs are in the notes, under "Proposed Feature PRs".
+on 2026-11-26 ("Accept after"), and the What line below includes it. The Feature lives in the
+`harness-lab` package, not a `ledger eval` subcommand, so `ledger`'s CLI contract stays as
+tagged (Beau, 2026-11-26: "Yes, harness-lab"). The cases run locally (H10, 2026-11-26: "stay
+local"), until Feature PR 2's runner has 20 or more runs per case and a flake rate. Nothing is
+open for Beau. The proposed Feature PRs are in the notes, under "Proposed Feature PRs".
 
 The first slice of Harness lab. It comes from Akshay's "[Our Claude skills and guidance, six months later](https://akshay.co/posts/our-claude-skills-and-guidance-six-months-later/)"
 (read 2026-11-19), where skills that passed lint and review still did badly in use. The plan
@@ -41,7 +43,7 @@ ordinary receipt (criterion id, spec path, commit), and `ledger receipts` prints
 There is no separate eval store and no judge model. The first cases are three of agent-kit's
 hard rules: `qualitydirector` takes brief numbers from `summary --json` and never computes
 them; the Product phase playbook never ticks a box without `receipt.py`; no flaky test is
-re-run. Once H9 is asked again and allows it, agent-kit's CI runs only the cases for plugins its
+re-run. The cases run locally (H10). If a later ask allows it, agent-kit's CI runs only the cases for plugins its
 `check_versions.py` reports as changed. Until then they run locally.
 **Depends on:** agent-kit R38, so cases come from sessions that happened. H8 and H9 are
 answered (2026-11-21): the unit opens early, and its cases run locally, not in CI, until the

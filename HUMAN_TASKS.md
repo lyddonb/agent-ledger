@@ -13,7 +13,7 @@ Things an agent cannot or should not do. **🚧 BLOCKER** items block other work
 | H7 | Require the `ledger-verify` check on `main` | Done 2026-11-14: required with the three test checks, strict |
 | H8 | Decide whether M3 unit 1 opens before M1 and M2 | Done 2026-11-21: yes, it opens early |
 | H9 | Decide whether evals may spend model calls in CI | Done 2026-11-21: local only for now |
-| H10 | H9 again, with a cost per case run: may agent-kit's CI run the M3 unit 1 cases? | To do; nothing waits on it until Feature PR 2 lands |
+| H10 | H9 again, with a cost per case run: may agent-kit's CI run the M3 unit 1 cases? | Done 2026-11-26: stay local |
 
 ### H1. Confirm the name
 Renaming is cheap until the repo is public and `uses: lyddonb/agent-ledger@v1` appears in other repos' CI. Rename the folder, `pyproject.toml`, the README and the specs if you want something else.
@@ -67,7 +67,12 @@ from `claude -p`) reads no rows and can start under either reading.
 agent-kit's CI gets no secret and no budget line. The cases run on a developer's machine until
 the Prototype step gives a cost per run; ask again with that number.
 
-### H10. May agent-kit's CI run the M3 unit 1 cases, now that a run has a cost?
+### H10. May agent-kit's CI run the M3 unit 1 cases, now that a run has a cost? — Done
+**Answer (2026-11-26):** Stay local. Beau's words: "and for 2, stay local". The cases run on a
+developer's machine. Ask again when Feature PR 2's runner has 20 or more runs per case and a
+flake rate for each. That ask comes with the secret and its budget cap, which is the `secrets`
+gate in agent-kit.
+
 H9 said to ask again once the Prototype step gave a cost per run. Measured on Sonnet 5.5 with
 the CLI's list-price figures ([notes](docs/notes/m3-unit1-prototype.md)): the `qualitydirector`
 case is about $0.17 a run, and the `receipt.py` case about $0.18 a run. "Passes three times in a
