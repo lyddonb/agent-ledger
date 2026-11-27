@@ -11,7 +11,7 @@
       "claim": "The ledger's policy reader still reads redact patterns from a policy file that has a checks: block, and ignores the block.",
       "verdict": "VERIFIED",
       "check": "read_policy_patterns on a copy of a synced ~/.agents/policy.yaml with a checks: block appended, once with redact_patterns: [] and once with one pattern",
-      "commit": "HEAD",
+      "commit": "af9a3cc",
       "record": ".changes/2026-11-27-s2-checks/reader.txt",
       "remaining": "agentfiles doesn't accept the key yet; that is the run's next unit."
     },
@@ -19,7 +19,7 @@
       "claim": "The test suite passes with the spec change.",
       "verdict": "VERIFIED",
       "check": "uv run --no-project --python 3.12 python -m unittest discover -s tests (the repo needs 3.10 or newer)",
-      "commit": "HEAD",
+      "commit": "af9a3cc",
       "record": ".changes/2026-11-27-s2-checks/tests.txt",
       "remaining": "CI on the pull request."
     }
