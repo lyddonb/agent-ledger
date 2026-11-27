@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "goal": "A harness-lab case is the probe of one spec criterion, so its runs land in the ledger as an ordinary receipt that ledger receipts prints (M3 unit 1, Feature PR 3 of 5).",
+  "changed": [
+    "verify-work's receipt.py records a case with no change to it: run from the skill repo's root, it runs python3 -m harness_lab run CASE --skill-root . --runs N as the probe. The README's new section, Recording a receipt, gives the call and what each verdict becomes.",
+    "A case's criterion must be an id a receipt can hold, such as P1-C1; a local id like C1 is refused when the case loads.",
+    "python -m harness_lab run prints a first line naming the case's criterion and the skill root's commit, so the receipt's evidence file shows which skill code ran and which criterion the case was written for.",
+    "receipt.py turns every non-zero exit into NOT VERIFIED, so an UNJUDGEABLE run is recorded as NOT VERIFIED with exit 2 in its probe. The README says so."
+  ],
+  "claims": [
+    {
+      "claim": "On agent-kit main, receipt.py around the runner wrote P1-C1 VERIFIED for 3 passing runs of the receipt-before-tick case; on a copy with the rule removed it wrote P1-C1 NOT VERIFIED (exit 1). Each receipt's commit matches the commit the runner's first line names, the probes hold no local paths, and ledger verify passes. The four runs cost $0.69.",
+      "verdict": "VERIFIED",
+      "check": "receipt.py --spec docs/phases/P1-harness-lab.md --criterion C1 -- python3 -m harness_lab run cases/receipt-before-tick/case.json --skill-root . --runs 3 (and --runs 1 on the rule-removed copy), then ledger receipts and ledger verify",
+      "commit": "8012301",
+      "record": ".changes/2026-11-27-harness-lab-receipt/checks.txt"
+    },
+    {
+      "claim": "With a fake claude, exits 0, 1 and 2 became VERIFIED, NOT VERIFIED and NOT VERIFIED (exit 2).",
+      "verdict": "VERIFIED",
+      "check": "receipt.py around python3 -m harness_lab run --claude FAKE, three plans",
+      "commit": "6ba5788",
+      "record": ".changes/2026-11-27-harness-lab-receipt/checks.txt"
+    },
+    {
+      "claim": "The criterion check and the first line each have a test that fails without them; the full suite passes on 3.12, and the harness-lab tests pass on the system Python 3.9 that ledger runs under here.",
+      "verdict": "VERIFIED",
+      "check": "python -m unittest discover -s tests (365 tests, OK) on 3.12; the two harness-lab test modules (49 tests, OK) on 3.9.6; each fix removed and its test seen failing",
+      "commit": "8012301",
+      "record": ".changes/2026-11-27-harness-lab-receipt/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "Feature PR 4: the three first cases in agent-kit, each with its fixture, a spec criterion and a receipt for three passes on main and one fail on a rule-removed copy",
+      "source": "ROADMAP M3 unit 1; docs/notes/m3-unit1-prototype.md, Proposed Feature PRs item 4",
+      "why_now": "a case can now be recorded as a receipt, which is what unit 1's Done when needs",
+      "impact": "agent-kit's hard rules get checked receipts, so an edit that drops one shows as NOT VERIFIED"
+    },
+    {
+      "item": "In agent-kit's receipt.py, record a chosen exit code (harness-lab's 2) as INCONCLUSIVE instead of NOT VERIFIED",
+      "source": "inferred from this PR's fake-claude check",
+      "why_now": "PR 4's receipts will mix runs that could not be judged with real failures",
+      "impact": "a reader of ledger receipts can tell a broken skill from a broken setup without reading the exit code"
+    }
+  ],
+  "release": {
+    "note": "A harness-lab case can now be a criterion's probe: run it through verify-work's receipt.py and ledger receipts shows the verdict. A case's criterion must be a full receipt id such as P1-C1. No ledger command changed."
+  }
+}
