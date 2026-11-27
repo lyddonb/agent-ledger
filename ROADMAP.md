@@ -21,17 +21,21 @@ See the charter's Plan section. In short: (1) entry model, hashing and verify; (
 
 ### M3 unit 1. Hard rules as tool-call checks
 **Status:** Prototype done (2026-11-21 and 2026-11-26, [notes](docs/notes/m3-unit1-prototype.md)).
-Feature not started. The prototype found the assertion list below too narrow: two of the three
-first cases need a check on the fixture after the run, not only on tool calls. The proposed
-Feature PRs are in the notes, under "Proposed Feature PRs". H10 re-asks H9 with a cost per run.
+Feature not started. The prototype found tool-call assertions alone too narrow: two of the three
+first cases need a check on the fixture after the run. Beau accepted the `after` assertion kind
+on 2026-11-26 ("Accept after"), and the What line below includes it. Still open: where the
+Feature lives (`harness-lab` or a `ledger eval` subcommand, the notes recommend `harness-lab`)
+and H10. The proposed Feature PRs are in the notes, under "Proposed Feature PRs".
 
 The first slice of Harness lab. It comes from Akshay's "[Our Claude skills and guidance, six months later](https://akshay.co/posts/our-claude-skills-and-guidance-six-months-later/)"
 (read 2026-11-19), where skills that passed lint and review still did badly in use. The plan
 across repos is in [agent-kit's roadmap](https://github.com/lyddonb/agent-kit/blob/main/ROADMAP.md),
 under Skill ops. This is the deterministic half of its behavioral evals.
 
-**What:** A case is a prompt, a fixture repo and assertions on the tool calls of a headless
-agent run: `calls`, `never_calls` and argument matches. Each hard rule is a criterion in a spec
+**What:** A case is a prompt, a fixture repo and assertions on a headless agent run: `calls`,
+`never_calls` and argument matches on its tool calls, and `after` checks on the fixture once the
+run ends. An `after` check is a command run in the fixture whose exit code is the verdict, so it
+stays rules and exit codes. Each hard rule is a criterion in a spec
 file in agent-kit, and the eval command is that criterion's probe. A run then writes an
 ordinary receipt (criterion id, spec path, commit), and `ledger receipts` prints the results.
 There is no separate eval store and no judge model. The first cases are three of agent-kit's
@@ -44,8 +48,9 @@ answered (2026-11-21): the unit opens early, and its cases run locally, not in C
 Prototype step gives a cost per run.
 **Playbook:** Prototype first, to settle how to capture tool calls from `claude -p` and from
 one other tool. Then Feature, split into PRs with the Multi-phase plan playbook.
-**Done when:** each first case fails on a skill edit that removes the rule it guards, and
-passes on agent-kit's main three times in a row.
+**Done when:** each first case, judged on its tool-call assertions and its `after` checks, fails
+on a skill edit that removes the rule it guards, and passes on agent-kit's main three times in a
+row.
 **Why not done:** agent-kit's R3 and R13 waited on real prompts. Its R38 finds them.
 **Prioritize when:** agent-kit R38 has four weeks of rows, or before the next edit to
 beau-mode's non-negotiables. agent-kit's R3 and R13 point here, and its R25 uses these evals to
