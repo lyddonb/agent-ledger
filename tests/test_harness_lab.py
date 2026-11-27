@@ -127,6 +127,10 @@ class LoadCase(CaseFiles):
         self.assertIn("fixture", self.problems(case_json(fixture="../elsewhere")))
         self.assertIn("plugin", self.problems(case_json(plugin="/abs/plugins/bstack")))
 
+    def test_the_criterion_must_be_an_id_a_receipt_can_hold(self):
+        self.assertIn("criterion", self.problems(case_json(criterion="C1")), "a local id without its phase is refused")
+        self.assertIn("criterion", self.problems(case_json(criterion="P1-C01")), "a leading zero is refused")
+
     def test_a_key_given_twice_is_refused_so_one_pattern_cannot_hide_another(self):
         text = json.dumps(case_json()).replace('"match": "^gh\\\\b"', '"match": "^gh\\\\b", "match": "^curl\\\\b"')
         self.assertIn('"match": "^curl', text, "the test built a case with the key twice")

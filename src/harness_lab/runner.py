@@ -86,12 +86,21 @@ def claude_command(case: Case, settings: Settings, plugin_dirs: Sequence[Path], 
     return command
 
 
+def _git_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def skill_commit(root: Path) -> str | None:
+    head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], env=_git_env(), capture_output=True, text=True)
+    return head.stdout.strip() if head.returncode == 0 else None
+
+
 def stage(case: Case, plugins: Mapping[str, Path], root: Path) -> tuple[Path, list[Path]]:
     """Copy the fixture to `root/repo` as a one-commit git repo, and each plugin to `root/plugins/<name>`."""
     repo = root / "repo"
     shutil.copytree(case.fixture, repo, ignore=shutil.ignore_patterns(".git"))
     git = ["git", "-C", str(repo)]
-    git_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    git_env = _git_env()
     for args in (["init", "-q", "-b", "main"],
                  ["config", "user.name", "fixture"], ["config", "user.email", "fixture@example.invalid"],
                  ["add", "-A"], ["commit", "-q", "-m", "fixture", "--no-verify"]):

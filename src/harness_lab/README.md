@@ -2,7 +2,7 @@
 
 harness-lab checks that a skill's hard rules hold when an agent uses the skill. A **case** is a prompt, a fixture repo and a list of assertions. A headless agent run of the prompt in the fixture is judged against them. The judge is rules and exit codes, not a judge model. This is M3 unit 1 in the [roadmap](../../ROADMAP.md). The design comes from the [prototype notes](../../docs/notes/m3-unit1-prototype.md).
 
-This package holds the case format, the judge (Feature PR 1) and the runner (Feature PR 2). The runner starts `claude -p`, so it spends money. It runs on a developer's machine, not in CI (H10). The package is standard library only and ships inside the `agent-ledger` distribution. It adds no command to `ledger`, so `ledger`'s CLI contract is unchanged.
+This package holds the case format, the judge (Feature PR 1), the runner (Feature PR 2) and the way a run becomes a receipt (Feature PR 3). The runner starts `claude -p`, so it spends money. It runs on a developer's machine, not in CI (H10). The package is standard library only and ships inside the `agent-ledger` distribution. It adds no command to `ledger`, so `ledger`'s CLI contract is unchanged.
 
 ## A case
 
@@ -32,7 +32,7 @@ One JSON file per case, beside its fixture:
 | Field | Meaning |
 |---|---|
 | `id` | The case's name: lowercase letters, digits and `-` |
-| `criterion` | The criterion id in the agent-kit spec this case is the probe for |
+| `criterion` | The criterion this case is the probe for, as a receipt names it: `P1-C1` is `C1` in a spec whose file name starts with `P1-`. A local id like `C1` is refused |
 | `plugin` | The plugin under test, as a path in the skill repo. Its folder name is the plugin's name. The runner also loads the plugins its `plugin.json` lists under `dependencies` |
 | `fixture` | The fixture repo, as a path relative to the case file |
 | `prompt` | What the agent is asked to do. It should tempt the agent to break the rule, not order it to |
@@ -100,6 +100,32 @@ Before it starts `claude`, the runner refuses a setup that would waste the run. 
 A run is `UNJUDGEABLE` when `claude` exits non-zero or takes longer than `--timeout` (900 seconds). It is also `UNJUDGEABLE` for any reason the judge finds.
 
 It prints each run's verdict, its assertions, its cost, its tokens (input, output and cache writes), its wall time and the load average. Wall time on a busy machine says little, and cost and tokens are the numbers to compare. It exits 1 if any run failed, 2 if none failed and any run was `UNJUDGEABLE`, and 0 if every run passed. A setup error on a later run stops the runs there, and it counts as `UNJUDGEABLE` beside the runs before it. The total cost leaves out runs with no cost, such as a run that timed out before its result, and the summary says how many those were. `--model` (default `sonnet`) and `--budget-usd` (default 2.00, per run) set the rest.
+
+## Recording a receipt
+
+A case is the probe of one criterion in the skill repo's spec, so a run is recorded the way any probe is: verify-work's `receipt.py` runs the runner and writes an ordinary `verification` entry with a receipt. From the skill repo's root, with a ledger run open there:
+
+```sh
+PYTHONPATH=/path/to/agent-ledger/src python3 plugins/bstack/skills/verify-work/scripts/receipt.py \
+  --run RUN_ID --actor ACTOR_JSON --spec docs/phases/P1-SLUG.md --criterion C1 \
+  -- python3 -m harness_lab run cases/CASE/case.json --skill-root . --runs 3
+ledger receipts RUN_ID
+```
+
+- **Set `PYTHONPATH` outside the probe, or install agent-ledger in that `python3`.** `receipt.py` records everything after `--` as the probe, and the probe goes into the ledger. `env PYTHONPATH=... python3 ...` there would write this machine's paths into the repo. The probe inherits `receipt.py`'s environment.
+- **Pass `--skill-root .`.** The receipt names the commit of the repo `receipt.py` runs in, so the skill under test must be that repo. The runner's first line says which commit it tested (`CASE probes P1-C1; skill root . at SHA`), and `receipt.py` copies the output into the receipt's evidence file, so a reader can check the two match.
+- **`--runs 3` gives one receipt for three runs.** It is `VERIFIED` only when all three passed.
+- **Match the criterion by hand.** `receipt.py` takes the criterion from `--spec` and `--criterion`, not from the case. The runner's first line names the case's, in the evidence beside the receipt's.
+
+What each verdict becomes:
+
+| Runner | Exit | Receipt |
+|---|---|---|
+| `PASS` | 0 | `VERIFIED` |
+| `FAIL` | 1 | `NOT VERIFIED`, probe `(exit 1)` |
+| `UNJUDGEABLE` | 2 | `NOT VERIFIED`, probe `(exit 2)` |
+
+`receipt.py` turns every non-zero exit into `NOT VERIFIED`, so a run that couldn't be judged reads as a failed probe there. The exit code in the Probe column tells the two apart: `(exit 2)` means the run said nothing about the skill. Neither verdict ticks the box.
 
 ## Judging a run by hand
 

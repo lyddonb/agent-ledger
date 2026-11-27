@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -245,6 +246,19 @@ class CommandLine(RunnerFixture):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("/2  PASS  receipt-before-tick"), 2, out)
         self.assertIn("2 passed, 0 failed, 0 unjudgeable of 2; $0.360 in all", out)
+
+    def test_the_output_names_the_criterion_and_the_skill_commit_that_ran(self):
+        self.follows_the_rule()
+        _, out = self.run_cli()
+        self.assertIn(f"receipt-before-tick probes P1-C1; skill root {self.kit} is not in a git repo", out)
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        for args in (["init", "-q"], ["add", "-A"],
+                     ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "kit"]):
+            subprocess.run(["git", "-C", str(self.kit), *args], check=True, env=env)
+        head = subprocess.run(["git", "-C", str(self.kit), "rev-parse", "HEAD"], capture_output=True, text=True, env=env)
+        _, out = self.run_cli()
+        self.assertIn(f"skill root {self.kit} at {head.stdout.strip()}", out,
+                      "a receipt's evidence shows which commit of the skill ran")
 
     def test_a_setup_error_on_a_later_run_keeps_the_earlier_failure(self):
         self.plan(commands=["echo no receipt"], writes={"docs/P1.md": "- [x] **C1.**\n"})
