@@ -5,6 +5,7 @@
     "verify-work's receipt.py records a case with no change to it: run from the skill repo's root, it runs python3 -m harness_lab run CASE --skill-root . --runs N as the probe. The README's new section, Recording a receipt, gives the call and what each verdict becomes.",
     "A case's criterion must be an id a receipt can hold, such as P1-C1; a local id like C1 is refused when the case loads.",
     "python -m harness_lab run prints a first line naming the case's criterion and the skill root's commit, so the receipt's evidence file shows which skill code ran and which criterion the case was written for.",
+    "In a git repo the runner stages only the plugin files git doesn't ignore, so an ignored file, which is in no commit, never runs; untracked files are still staged and receipt.py records them as INCONCLUSIVE.",
     "receipt.py turns every non-zero exit into NOT VERIFIED, so an UNJUDGEABLE run is recorded as NOT VERIFIED with exit 2 in its probe. The README says so."
   ],
   "claims": [
@@ -23,10 +24,10 @@
       "record": ".changes/2026-11-27-harness-lab-receipt/checks.txt"
     },
     {
-      "claim": "The criterion check and the first line each have a test that fails without them; the full suite passes on 3.12, and the harness-lab tests pass on the system Python 3.9 that ledger runs under here.",
+      "claim": "The criterion check, the first line and the staging of only unignored files each have a test that fails without them; the full suite passes on 3.12, the harness-lab tests pass on the system Python 3.9 that ledger runs under here, and on the real agent-kit layout all 152 tracked plugin files are staged.",
       "verdict": "VERIFIED",
-      "check": "python -m unittest discover -s tests (365 tests, OK) on 3.12; the two harness-lab test modules (49 tests, OK) on 3.9.6; each fix removed and its test seen failing",
-      "commit": "8012301",
+      "check": "python -m unittest discover -s tests (366 tests, OK) on 3.12; the two harness-lab test modules (50 tests, OK) on 3.9.6; each fix removed and its test seen failing; a fake-claude run on the main copy with --keep, counting staged files against git ls-files",
+      "commit": "eba434c",
       "record": ".changes/2026-11-27-harness-lab-receipt/checks.txt"
     }
   ],

@@ -45,10 +45,16 @@ norule receipt.py exit 0
 P1-C1 VERIFIED (seq 2) / P1-C1 NOT VERIFIED (seq 3) / P1-C1 NOT VERIFIED (seq 4), the last with probe (exit 2)
 
 ## tests
-python -m unittest discover -s tests: Ran 365 tests, OK (skipped=1) on 3.12
-tests.test_harness_lab tests.test_harness_lab_runner: Ran 49 tests, OK on /usr/bin/python3 3.9.6
+python -m unittest discover -s tests: Ran 366 tests, OK (skipped=1) on 3.12
+tests.test_harness_lab tests.test_harness_lab_runner: Ran 50 tests, OK on /usr/bin/python3 3.9.6
 Mutations: with the criterion check removed, test_the_criterion_must_be_an_id_a_receipt_can_hold fails;
 with the commit lookup removed, test_the_output_names_the_criterion_and_the_skill_commit_that_ran fails.
 
 ## ledger verify (each repo)
 ok: 1 runs, 0 sealed, 0 indexed
+
+## review fixes (eba434c)
+A cross-family review (gpt-5.6-sol-high) found: the PASS row left out INCONCLUSIVE on a dirty tree; ignored plugin
+files were staged, so a receipt's commit could miss code that ran; the commit-line test used assertIn. All three fixed.
+With the staging fix removed, test_in_a_git_repo_only_files_git_does_not_ignore_are_staged fails.
+Fake-claude run on the main copy, --keep: 152 files staged under plugins/, git ls-files plugins/bstack plugins/principles: 152. PASS.
