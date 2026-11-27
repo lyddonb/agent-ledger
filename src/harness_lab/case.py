@@ -35,6 +35,7 @@ class AfterCheck:
 @dataclass(frozen=True)
 class Case:
     id: str
+    directory: Path
     criterion: str
     plugin: PurePosixPath
     fixture: Path
@@ -119,6 +120,7 @@ def _parse(raw: object, path: Path, problems: list[str]) -> Case | None:
 
     return Case(
         id=case_id,
+        directory=path.parent,
         criterion=text("criterion"),
         plugin=plugin,
         fixture=path.parent / fixture,

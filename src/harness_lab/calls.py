@@ -29,6 +29,8 @@ class Run:
     calls: tuple[ToolCall, ...]
     plugins: frozenset[str] | None
     ended: str | None
+    cost_usd: float | None = None
+    tokens: int = 0
 
 
 class StreamError(ValueError):
@@ -44,12 +46,16 @@ def read_claude_stream(lines: Iterable[str]) -> Run:
     `plugins` is None when no `init` event arrived, and otherwise the plugins every `init`
     listed. `ended` is the last `result` event's subtype, or None when the stream has none. A run that resumed (a background task
     finishing) has several `init` and `result` events; its calls are all of them in order.
+    `cost_usd` is the last result's total, which counts every turn. `tokens` adds up each
+    result's input, output and cache-write tokens, which count only that result's turn.
     """
     uses: list[tuple[dict, str | None]] = []
     results: dict[str, dict] = {}
     denied: set[str] = set()
     plugins: frozenset[str] | None = None
     ended: str | None = None
+    cost_usd: float | None = None
+    tokens = 0
     for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
@@ -73,6 +79,10 @@ def read_claude_stream(lines: Iterable[str]) -> Run:
                     results[block.get("tool_use_id")] = block
         elif kind == "result":
             ended = event.get("subtype") if not event.get("is_error") else "error"
+            if isinstance(event.get("total_cost_usd"), (int, float)):
+                cost_usd = float(event["total_cost_usd"])
+            usage = event.get("usage") or {}
+            tokens += sum(usage.get(k) or 0 for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens"))
             denied.update(d.get("tool_use_id") for d in event.get("permission_denials") or [] if isinstance(d, dict))
     calls = []
     for block, parent in uses:
@@ -83,7 +93,7 @@ def read_claude_stream(lines: Iterable[str]) -> Run:
         if not isinstance(call_input, dict):
             raise StreamError(f"tool_use {call_id} has an input that is not an object")
         calls.append(ToolCall(call_id, name, MappingProxyType(call_input), parent, _outcome(call_id, results, denied)))
-    return Run(tuple(calls), plugins, ended)
+    return Run(tuple(calls), plugins, ended, cost_usd, tokens)
 
 
 def _blocks(event: dict) -> list[dict]:

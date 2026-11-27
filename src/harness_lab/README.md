@@ -2,7 +2,7 @@
 
 harness-lab checks that a skill's hard rules hold when an agent uses the skill. A **case** is a prompt, a fixture repo and a list of assertions. A headless agent run of the prompt in the fixture is judged against them. The judge is rules and exit codes, not a judge model. This is M3 unit 1 in the [roadmap](../../ROADMAP.md). The design comes from the [prototype notes](../../docs/notes/m3-unit1-prototype.md).
 
-This package holds the case format and the judge (Feature PR 1). The runner, which starts `claude -p` and spends money, comes in Feature PR 2. Until then, a run is judged from a stream and a fixture that already exist. The package is standard library only and ships inside the `agent-ledger` distribution. It adds no command to `ledger`, so `ledger`'s CLI contract is unchanged.
+This package holds the case format, the judge (Feature PR 1) and the runner (Feature PR 2). The runner starts `claude -p`, so it spends money. It runs on a developer's machine, not in CI (H10). The package is standard library only and ships inside the `agent-ledger` distribution. It adds no command to `ledger`, so `ledger`'s CLI contract is unchanged.
 
 ## A case
 
@@ -52,6 +52,8 @@ A case needs at least one assertion in `calls`, `never_calls` or `after`. An unk
 - `args` lists the input keys to look in, such as `["command"]` or `["file_path", "path"]`. A value that isn't a string is matched as compact JSON.
 - `match` is a regular expression searched for in each of those values.
 
+A case that should only pass when the skill really loaded says so: add a `calls` check on the `Skill` call, such as `{"id": "loads-beau-mode", "tool": "Skill", "args": ["skill"], "match": "beau-mode"}`. The runner checks that the plugin loaded, not that the agent used it.
+
 Subagent calls count the same as the main agent's calls. A rule like "never compute the numbers" holds for the whole run, whoever made the call.
 
 A call that the harness denied (a `deny` rule) or rejected before it ran (an unknown skill, bad input) counts for `never_calls` but not for `calls`. An attempt to break a rule is a failure even when the harness stops it. A required call that never ran was not made.
@@ -60,7 +62,9 @@ Match shell commands loosely. Agents put script paths in variables and chain com
 
 ### After checks
 
-An `after` check is `{id, run}`. `run` is a shell command, run with the fixture as its working folder once the agent has finished. Exit 0 passes. Any other exit fails.
+An `after` check is `{id, run}`. `run` is a shell command, run with the fixture as its working folder once the agent has finished. Exit 0 passes. Any other exit fails. Each command gets 120 seconds, and one that takes longer makes the run `UNJUDGEABLE`.
+
+A check that needs a script keeps it beside the case file, not in the fixture, where the agent could read or change it. The command finds it through `$CASE_DIR`, the folder that holds the case file: `python3 "$CASE_DIR/checks/ticked_implies_verified.py"`.
 
 Use one when the rule is about the state the run leaves: "a ticked box has a VERIFIED receipt" holds whatever order the agent did things in. Use one too when what the agent wrote matters more than how it wrote it: `! grep -E 'PATTERN' briefs/latest.md` sees a number in the file whether the agent wrote it with a heredoc or an edit.
 
@@ -78,6 +82,25 @@ Each assertion passes or fails, and the run gets one verdict:
 
 A run where the plugin didn't load is `UNJUDGEABLE`, not `FAIL`. Otherwise a broken setup would read as a broken skill.
 
+## Running a case
+
+```sh
+PYTHONPATH=src python3 -m harness_lab run CASE.json --skill-root ~/code/agent-kit --runs 3
+```
+
+`--skill-root` is the skill repo to test: agent-kit's main, or a copy with a rule removed. For each run, the runner:
+
+1. Makes a new temporary folder outside every repo. The fixture is copied to `repo/` in it, without any `.git` folder, and committed as one commit in a new git repo with no remote. The plugin is copied to `plugins/<name>/`, and so is each plugin its `.claude-plugin/plugin.json` lists under `dependencies`, found beside it in the skill repo. The paths name no variant, so a run can't tell main from a copy with the rule removed.
+2. Starts `claude -p` in `repo/` with the case's prompt, tools and deny rules, and nothing else: project settings only, no MCP servers, only those plugins, no session saved to disk, and a budget cap. Its environment is the caller's `PATH`, `HOME`, `USER`, `LOGNAME`, `TMPDIR` and `LANG`, and nothing else. A run started from a desktop session behaves like one started from a terminal. `USER` is needed for the CLI's login. Its built-in plugins still load: no flag turns them off.
+3. Runs the `after` checks in `repo/`, and judges the stream with the plugin and its dependencies as the required plugins.
+4. Deletes the folder, unless `--keep DIR` asks for a copy. The stream holds the run's transcript, so it stays on this machine and never goes into a repo.
+
+Before it starts `claude`, the runner refuses a setup that would waste the run. It refuses a missing plugin or dependency, a dependency named by a path, a `--keep` folder that already exists, and a `TMPDIR` inside the skill repo or the case's folder. It runs its own `git` commands without the caller's `GIT_*` variables.
+
+A run is `UNJUDGEABLE` when `claude` exits non-zero or takes longer than `--timeout` (900 seconds). It is also `UNJUDGEABLE` for any reason the judge finds.
+
+It prints each run's verdict, its assertions, its cost, its tokens (input, output and cache writes), its wall time and the load average. Wall time on a busy machine says little, and cost and tokens are the numbers to compare. It exits 1 if any run failed, 2 if none failed and any run was `UNJUDGEABLE`, and 0 if every run passed. A setup error on a later run stops the runs there, and it counts as `UNJUDGEABLE` beside the runs before it. The total cost leaves out runs with no cost, such as a run that timed out before its result, and the summary says how many those were. `--model` (default `sonnet`) and `--budget-usd` (default 2.00, per run) set the rest.
+
 ## Judging a run by hand
 
 ```sh
@@ -85,7 +108,7 @@ PYTHONPATH=src python3 -m harness_lab judge CASE.json --stream stream.jsonl --fi
   --require-plugin bstack --require-plugin principles
 ```
 
-It runs the `after` checks in `--fixture`, so pass the copy the agent worked in, not the case's own fixture. It prints one line per assertion and exits 0, 1 or 2. `--require-plugin` defaults to the folder name of the case's `plugin` only. The judge doesn't read `plugin.json`, so pass each dependency with its own `--require-plugin`. The runner (Feature PR 2) reads them from `plugin.json`. Each `after` command gets 120 seconds. One that takes longer makes the run `UNJUDGEABLE`.
+It runs the `after` checks in `--fixture`, so pass the copy the agent worked in, not the case's own fixture. It prints one line per assertion and exits 0, 1 or 2. `--require-plugin` defaults to the folder name of the case's `plugin` only. The judge doesn't read `plugin.json`, so pass each dependency with its own `--require-plugin`. The runner reads them from `plugin.json`.
 
 ## The stream
 

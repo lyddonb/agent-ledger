@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "goal": "A skill edit can be checked against a hard rule with one command: the runner starts a hermetic claude -p run of a case against a skill repo, as many times as asked, and the judge gives each run a verdict with its cost (M3 unit 1, Feature PR 2 of 5).",
+  "changed": [
+    "python -m harness_lab run CASE --skill-root PATH [--runs N] [--model] [--budget-usd] [--timeout] [--keep DIR]. Each run gets a new temporary folder: the fixture as a one-commit git repo with no remote (any .git in the fixture is dropped), and the plugin and its plugin.json dependencies under plugins/<name>, so no path names the variant under test.",
+    "claude -p runs with project settings only, no MCP servers, only those plugins, no saved session, the case's tools and deny rules, a budget cap, and only PATH, HOME, USER, LOGNAME, TMPDIR and LANG from the caller's environment. A non-zero exit, a timeout or an unreadable stream makes the run UNJUDGEABLE; so does anything the judge already treats that way.",
+    "after commands get CASE_DIR, the folder of the case file, so a check script lives beside the case and not in the fixture the agent can change.",
+    "Each run prints its verdict, assertions, cost, tokens (input, output and cache writes), wall time and load average; the exit code is 1 if any run failed, else 2 if any was unjudgeable, else 0. The folder is deleted unless --keep copies it.",
+    "The note's guess that the built-in cc-plugin-* plugins came from the desktop environment is corrected: they load under env -i too."
+  ],
+  "claims": [
+    {
+      "claim": "On the receipt.py case, the runner gives PASS on both runs against agent-kit main and FAIL on both runs against a copy with the rule removed, at about $0.18 a run and 19 to 33 s on a machine at a load average of 3 to 4.",
+      "verdict": "VERIFIED",
+      "check": "python -m harness_lab run receipt/case.json --skill-root kit --runs 2, and the same with kit-norule",
+      "commit": "74dc42b",
+      "record": ".changes/2026-11-26-harness-lab-runner/checks.txt"
+    },
+    {
+      "claim": "The runs were hermetic in the ways the README says: no stream mentions the variant's name, bstack and principles loaded in each, and each ran in its own temporary folder.",
+      "verdict": "VERIFIED",
+      "check": "grep and a script over the four kept streams' init events",
+      "commit": "74dc42b",
+      "record": ".changes/2026-11-26-harness-lab-runner/checks.txt"
+    },
+    {
+      "claim": "Against a fake claude, the runner passes only the listed variables, names no variant in any path, stages one commit with no fixture .git, loads dependencies, refuses a missing dependency, a dependency named by a path, an existing --keep folder and a TMPDIR inside the skill repo before starting claude, ignores the caller's GIT_* variables while staging, deletes a folder the agent locked, and turns a non-zero exit, a timeout or an unloaded dependency into UNJUDGEABLE.",
+      "verdict": "VERIFIED",
+      "check": "python -m unittest tests.test_harness_lab_runner (16 tests) and the full suite (363 tests, OK) on Python 3.12, after the review fixes",
+      "commit": "b2f276d",
+      "record": ".changes/2026-11-26-harness-lab-runner/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "Feature PR 3: the runner's verdict becomes a ledger receipt through receipt.py --criterion, so a case is the probe of its spec criterion",
+      "source": "ROADMAP M3 unit 1; docs/notes/m3-unit1-prototype.md, Proposed Feature PRs item 3",
+      "why_now": "the runner now gives the exit code a receipt records",
+      "impact": "ledger receipts shows which skill commit a hard rule was checked on and what came back"
+    },
+    {
+      "item": "Run each first case 20 or more times to get a flake rate, then ask H10 again",
+      "source": "HUMAN_TASKS H10",
+      "why_now": "the runner that makes those runs exists; at about $0.18 a run, 20 runs of one case is about $4",
+      "impact": "Beau can decide whether agent-kit's CI runs the cases with a measured flake rate, not a guess"
+    }
+  ],
+  "release": {
+    "note": "harness-lab can run a case: python -m harness_lab run starts a hermetic claude -p run of a case against a skill repo, as many times as asked, and prints each verdict with its cost, tokens and wall time. No ledger command changed."
+  }
+}
