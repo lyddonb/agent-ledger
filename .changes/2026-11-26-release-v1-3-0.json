@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "goal": "Give agentfiles a tagged agent-ledger release with the flag checks (#45), so the pinned ledger refuses a malformed flag instead of writing it (agent-kit H18 step 4).",
+  "changed": [
+    "The version is 1.3.0 in pyproject.toml, src/agent_ledger/__init__.py, uv.lock and the README's status line, the same files the 1.2.1 release changed (#43)."
+  ],
+  "claims": [
+    {
+      "claim": "The CLI reports 1.3.0.",
+      "verdict": "VERIFIED",
+      "check": "PYTHONPATH=src python3.12 -m agent_ledger.cli --version",
+      "commit": "0170e6e",
+      "record": ".changes/2026-11-26-release-v1-3-0/checks.txt"
+    },
+    {
+      "claim": "The suite passes at 1.3.0.",
+      "verdict": "INCONCLUSIVE",
+      "check": "cd tests && python3.12 -m unittest discover -s . (316 tests)",
+      "commit": "0170e6e",
+      "record": ".changes/2026-11-26-release-v1-3-0/checks.txt",
+      "remaining": "Two wall-clock tests failed under a load average of 168 to 226 and fail the same way on v1.2.1 under that load; the code they time is unchanged since v1.2.1. CI on this pull request is the check."
+    }
+  ],
+  "next": [
+    {
+      "item": "Tag v1.3.0 on this PR's merge commit, then merge agentfiles' pin PR (ref v1.3.0 and the lock) and run agentfiles sync",
+      "source": "agent-kit HUMAN_TASKS.md H18 step 4",
+      "why_now": "The pinned ledger 1.2.0 writes a flag missing its target, fix or evidence without complaint.",
+      "impact": "Flags that reach the weekly pass are complete, so each one can become a fix."
+    },
+    {
+      "item": "Make test_redact's and test_scan's linear-time tests hold under machine load",
+      "source": "inferred: they fail at 2x to 8x their limits when the machine is busy, on v1.2.1 too",
+      "why_now": "A local run on a busy machine can't tell a regression from load.",
+      "impact": "A red local suite means a real problem again."
+    }
+  ],
+  "release": {
+    "note": "1.3.0: ledger append checks flag entries. A lesson entry with data.kind \"flag\" is refused unless data.target, data.did_instead and data.suggested_fix are non-empty strings and the entry has at least one evidence line (S3, Flag entries). verify doesn't check them: they are a convention inside data, so format v1 is unchanged (#45)."
+  }
+}
