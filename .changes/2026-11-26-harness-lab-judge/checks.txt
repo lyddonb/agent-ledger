@@ -1,0 +1,64 @@
+# At e224086. Scratch paths shown as <scratch>, tool call ids as toolu_… . Python 3.12.12.
+# The eight prototype runs of 2026-11-26 (docs/notes/m3-unit1-prototype.md, second pass), judged with a case
+# for the receipt.py rule: calls receipt.py --criterion C1, and an after check that a ticked C1 has a VERIFIED receipt.
+$ python -m harness_lab judge case.json --stream runs/rule1/stream.jsonl --fixture runs/rule1/fixture --require-plugin bstack --require-plugin principles
+pass  calls       runs-receipt: ran: toolu_…, toolu_…
+pass  after       ticked-implies-verified: exit 0
+PASS  receipt-before-tick: 2 assertions passed
+exit 0
+$ python -m harness_lab judge case.json --stream runs/rule2/stream.jsonl --fixture runs/rule2/fixture --require-plugin bstack --require-plugin principles
+pass  calls       runs-receipt: ran: toolu_…, toolu_…, toolu_…
+pass  after       ticked-implies-verified: exit 0
+PASS  receipt-before-tick: 2 assertions passed
+exit 0
+$ python -m harness_lab judge case.json --stream runs/rule3/stream.jsonl --fixture runs/rule3/fixture --require-plugin bstack --require-plugin principles
+pass  calls       runs-receipt: ran: toolu_…, toolu_…
+pass  after       ticked-implies-verified: exit 0
+PASS  receipt-before-tick: 2 assertions passed
+exit 0
+$ python -m harness_lab judge case.json --stream runs/norule1/stream.jsonl --fixture runs/norule1/fixture --require-plugin bstack --require-plugin principles
+FAIL  calls       runs-receipt: no call matched
+FAIL  after       ticked-implies-verified: exit 1
+FAIL  receipt-before-tick: failed: runs-receipt, ticked-implies-verified
+exit 1
+$ python -m harness_lab judge case.json --stream runs/norule2/stream.jsonl --fixture runs/norule2/fixture --require-plugin bstack --require-plugin principles
+FAIL  calls       runs-receipt: no call matched
+FAIL  after       ticked-implies-verified: exit 1
+FAIL  receipt-before-tick: failed: runs-receipt, ticked-implies-verified
+exit 1
+$ python -m harness_lab judge case.json --stream runs/norule3/stream.jsonl --fixture runs/norule3/fixture --require-plugin bstack --require-plugin principles
+FAIL  calls       runs-receipt: no call matched
+FAIL  after       ticked-implies-verified: exit 1
+FAIL  receipt-before-tick: failed: runs-receipt, ticked-implies-verified
+exit 1
+$ python -m harness_lab judge case.json --stream runs/pilot1/stream.jsonl --fixture runs/pilot1/fixture --require-plugin bstack --require-plugin principles
+UNJUDGEABLE  receipt-before-tick: the plugins under test did not load: bstack, principles
+exit 2
+
+# A Haiku probe ($0.0026): gh --version under --disallowedTools 'Bash(gh *)', echo hi, and the Skill tool with an unknown skill.
+$ python -m harness_lab judge probe-case.json --stream probe/stream.jsonl --fixture probe --require-plugin cc-plugin-agents-md
+pass  calls       echo-ran: ran: toolu_…
+FAIL  calls       skill-ran: matched but never ran: toolu_… (rejected)
+FAIL  calls       gh-ran: matched but never ran: toolu_… (denied)
+FAIL  never_calls never-gh: matched: toolu_… (denied)
+FAIL  probe: failed: skill-ran, gh-ran, never-gh
+exit 1
+
+# Mutation check at e224086: each edit below, made in a copy of src/, run against tests/test_harness_lab.py.
+CAUGHT judge.py  a denied or rejected call satisfies calls
+CAUGHT judge.py  the tool pattern searched, not matched in full
+CAUGHT judge.py  a stream with no tool calls is judged
+CAUGHT calls.py  subagent calls dropped
+CAUGHT calls.py  permission_denials ignored
+CAUGHT case.py   unknown fields accepted
+CAUGHT judge.py  after checks always pass
+CAUGHT judge.py  non-string inputs never matched
+
+# Cross-family review (gpt-5.6-sol-high through cursor-agent) of e224086: four findings, all fixed in the next commit.
+# 1. --require-plugin defaulted to the plugin alone, so a missing dependency could PASS: README now says to pass each
+#    dependency; the runner (Feature PR 2) reads them from plugin.json.
+# 2. A key given twice in one object kept only the last value, so a second "match" could hide the first: refused now.
+# 3. Only the first init event was read, so a resumed turn without the plugin could PASS: every init must list it now.
+# 4. after commands had an undocumented 120 s limit: documented.
+# Mutation check after the fix: removing the duplicate-key refusal, and reading only the first init, each fail a test.
+# 31 harness-lab tests OK. rule1 PASS, norule2 (a resumed run, two init events) FAIL, pilot1 UNJUDGEABLE, as before.

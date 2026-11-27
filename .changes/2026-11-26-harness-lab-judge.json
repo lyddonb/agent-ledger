@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "goal": "A skill's hard rule can be checked on a real agent run by rules and exit codes, not a judge model: a case file says what the run must do, must never do and must leave behind, and a judge turns a `claude -p` stream and its fixture into PASS, FAIL or UNJUDGEABLE (M3 unit 1, Feature PR 1 of 5).",
+  "changed": [
+    "New package src/harness_lab, shipped inside the agent-ledger distribution, standard library only, with its README as the case format's contract. No ledger command changes.",
+    "The case file: id, criterion, plugin, fixture, prompt, tools, deny, and three assertion kinds. calls and never_calls are {id, tool, args, match}: tool is a full-match regular expression on the tool name, args the input keys to search, match a regular expression. after is {id, run}: a shell command run in the fixture after the run, exit 0 passes. Unknown fields and keys given twice are refused, and every problem is reported at once.",
+    "read_claude_stream turns stream-json into tool calls with an outcome: ran, denied (in the result's permission_denials), rejected (a <tool_use_error> result, such as an unknown skill) or no result. A resumed run's turns are all read. Subagent calls carry their parent id and count like the main agent's.",
+    "judge is pure: the calls and the after exit codes in, one result per assertion and a verdict out. A denied or rejected call breaks never_calls but doesn't satisfy calls. The run is UNJUDGEABLE when the stream has no init event, a required plugin is missing from any init event, there is no result event, the run ended in an error, or there are no tool calls at all.",
+    "python -m harness_lab judge CASE --stream --fixture judges a run that already happened and exits 0, 1 or 2."
+  ],
+  "claims": [
+    {
+      "claim": "On the eight real runs from the prototype's second pass, the judge gives the prototype's verdicts: PASS on the three runs with the rule, FAIL on the three without it (no receipt.py call, and a ticked C1 with no VERIFIED receipt), and UNJUDGEABLE on pilot 1, where bstack didn't load.",
+      "verdict": "VERIFIED",
+      "check": "python -m harness_lab judge on each run's stream and fixture, with a case for the receipt.py rule",
+      "commit": "e224086",
+      "record": ".changes/2026-11-26-harness-lab-judge/checks.txt"
+    },
+    {
+      "claim": "On a real stream with a call refused by --disallowedTools and a Skill call with an unknown skill, the denied call breaks never_calls, and neither call satisfies calls.",
+      "verdict": "VERIFIED",
+      "check": "a $0.0026 Haiku probe, judged with python -m harness_lab judge",
+      "commit": "e224086",
+      "record": ".changes/2026-11-26-harness-lab-judge/checks.txt"
+    },
+    {
+      "claim": "The 31 harness-lab tests pass on hand-written streams, and each of ten edits that break a promise in the README makes at least one of them fail.",
+      "verdict": "VERIFIED",
+      "check": "python -m unittest tests.test_harness_lab on Python 3.12; the ten edits made one at a time in a copy of src/ (eight at e224086, two more after the review fixes)",
+      "commit": "5b450d8",
+      "record": ".changes/2026-11-26-harness-lab-judge/checks.txt"
+    }
+  ],
+  "next": [
+    {
+      "item": "Feature PR 2: the runner, which copies the fixture and the plugin with its dependencies to neutral paths, starts claude -p hermetically, and hands the stream to this judge",
+      "source": "ROADMAP M3 unit 1; docs/notes/m3-unit1-prototype.md, Proposed Feature PRs item 2",
+      "why_now": "the judge it feeds now exists, and H10 waits on 20 or more runs per case from it",
+      "impact": "a skill edit can be checked against its hard rules with one command, instead of by reading the skill"
+    }
+  ],
+  "release": {
+    "note": "New: harness-lab, a case format and judge for checking a skill's hard rules on a headless agent run (`python -m harness_lab judge`). No ledger command changed."
+  }
+}
