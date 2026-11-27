@@ -107,13 +107,14 @@ A case is the probe of one criterion in the skill repo's spec, so a run is recor
 
 ```sh
 PYTHONPATH=/path/to/agent-ledger/src python3 plugins/bstack/skills/verify-work/scripts/receipt.py \
-  --run RUN_ID --actor ACTOR_JSON --spec docs/phases/P1-SLUG.md --criterion C1 \
+  --run RUN_ID --actor ACTOR_JSON --spec docs/phases/P1-SLUG.md --criterion C1 --inconclusive-exit 2 \
   -- python3 -m harness_lab run cases/CASE/case.json --skill-root . --runs 3
 ledger receipts RUN_ID
 ```
 
 - **Set `PYTHONPATH` outside the probe, or install agent-ledger in that `python3`.** `receipt.py` records everything after `--` as the probe, and the probe goes into the ledger. `env PYTHONPATH=... python3 ...` there would write this machine's paths into the repo. The probe inherits `receipt.py`'s environment.
 - **Pass `--skill-root .`.** The receipt names the commit of the repo `receipt.py` runs in, so the skill under test must be that repo. In a git repo the runner copies only the plugin files git doesn't ignore, and `receipt.py` records any uncommitted or untracked change as `INCONCLUSIVE`, so a `VERIFIED` receipt's commit holds the code that ran. The runner's first line says which commit it tested (`CASE probes P1-C1; skill root . at SHA`), and `receipt.py` copies the output into the receipt's evidence file, so a reader can check the two match.
+- **Pass `--inconclusive-exit 2`.** The runner exits 2 for `UNJUDGEABLE`, a run that says nothing about the skill, for example when the plugin didn't load, `claude` failed or the budget ran out. The flag makes `receipt.py` record that exit as `INCONCLUSIVE`. It needs verify-work's `receipt.py` from bstack 0.52.0 or newer.
 - **`--runs 3` gives one receipt for three runs.** It is `VERIFIED` only when all three passed.
 - **Match the criterion by hand.** `receipt.py` takes the criterion from `--spec` and `--criterion`, not from the case. The runner's first line names the case's, in the evidence beside the receipt's.
 
@@ -123,9 +124,9 @@ What each verdict becomes:
 |---|---|---|
 | `PASS` | 0 | `VERIFIED`, or `INCONCLUSIVE` when the skill repo has uncommitted changes |
 | `FAIL` | 1 | `NOT VERIFIED`, probe `(exit 1)` |
-| `UNJUDGEABLE` | 2 | `NOT VERIFIED`, probe `(exit 2)` |
+| `UNJUDGEABLE` | 2 | `INCONCLUSIVE`, probe `(exit 2)`, with `--inconclusive-exit 2`; `NOT VERIFIED`, probe `(exit 2)`, without it |
 
-`receipt.py` turns every non-zero exit into `NOT VERIFIED`, so a run that couldn't be judged reads as a failed probe there. The exit code in the Probe column tells the two apart: `(exit 2)` means the run said nothing about the skill. Neither verdict ticks the box.
+With `--inconclusive-exit 2`, a run that couldn't be judged is recorded as `INCONCLUSIVE`, and the entry's `why` reads `probe exited 2; exit 2 says nothing (--inconclusive-exit)`. Without the flag, `receipt.py` turns every non-zero exit into `NOT VERIFIED`, and only the exit code in the Probe column tells an unjudgeable run from a failed one. Neither `INCONCLUSIVE` nor `NOT VERIFIED` ticks the box.
 
 ## Judging a run by hand
 
