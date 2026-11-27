@@ -86,12 +86,21 @@ def claude_command(case: Case, settings: Settings, plugin_dirs: Sequence[Path], 
     return command
 
 
+def _git_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def skill_commit(root: Path) -> str | None:
+    head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], env=_git_env(), capture_output=True, text=True)
+    return head.stdout.strip() if head.returncode == 0 else None
+
+
 def stage(case: Case, plugins: Mapping[str, Path], root: Path) -> tuple[Path, list[Path]]:
     """Copy the fixture to `root/repo` as a one-commit git repo, and each plugin to `root/plugins/<name>`."""
     repo = root / "repo"
     shutil.copytree(case.fixture, repo, ignore=shutil.ignore_patterns(".git"))
     git = ["git", "-C", str(repo)]
-    git_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    git_env = _git_env()
     for args in (["init", "-q", "-b", "main"],
                  ["config", "user.name", "fixture"], ["config", "user.email", "fixture@example.invalid"],
                  ["add", "-A"], ["commit", "-q", "-m", "fixture", "--no-verify"]):
@@ -99,9 +108,24 @@ def stage(case: Case, plugins: Mapping[str, Path], root: Path) -> tuple[Path, li
     dirs = []
     for name, folder in plugins.items():
         dest = root / "plugins" / name
-        shutil.copytree(folder, dest, ignore=shutil.ignore_patterns(".git"))
+        _copy_plugin(folder, dest)
         dirs.append(dest)
     return repo, dirs
+
+
+def _copy_plugin(folder: Path, dest: Path) -> None:
+    """In a git repo, only the files git doesn't ignore: an ignored file is in no commit a receipt can name."""
+    listed = subprocess.run(["git", "-C", str(folder), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                            env=_git_env(), capture_output=True)
+    if listed.returncode != 0:
+        shutil.copytree(folder, dest, ignore=shutil.ignore_patterns(".git"))
+        return
+    dest.mkdir(parents=True)
+    for rel in filter(None, listed.stdout.decode("utf-8", "surrogateescape").split("\0")):
+        source = folder / rel
+        if source.is_symlink() or source.is_file():
+            (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest / rel, follow_symlinks=False)
 
 
 def run_case(case: Case, skill_root: Path, settings: Settings, keep: Path | None = None) -> RunReport:

@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from agent_ledger.receipt import CRITERION_RE
+
 _ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
@@ -104,6 +106,9 @@ def _parse(raw: object, path: Path, problems: list[str]) -> Case | None:
     case_id = text("id")
     if case_id and not _ID.fullmatch(case_id):
         problems.append(f"'id' {case_id!r} must be lowercase letters, digits and '-'")
+    criterion = text("criterion")
+    if criterion and not CRITERION_RE.fullmatch(criterion):
+        problems.append(f"'criterion' {criterion!r} must be a receipt's criterion id, like P1-C1")
     plugin = PurePosixPath(text("plugin"))
     fixture = text("fixture")
     for key, value in (("plugin", plugin.as_posix()), ("fixture", fixture)):
@@ -121,7 +126,7 @@ def _parse(raw: object, path: Path, problems: list[str]) -> Case | None:
     return Case(
         id=case_id,
         directory=path.parent,
-        criterion=text("criterion"),
+        criterion=criterion,
         plugin=plugin,
         fixture=path.parent / fixture,
         prompt=text("prompt"),

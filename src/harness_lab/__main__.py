@@ -9,7 +9,7 @@ from pathlib import Path
 from .calls import StreamError, read_claude_stream
 from .case import CaseError, load_case
 from .judge import Judgment, Verdict, judge, run_after_checks
-from .runner import RunReport, Settings, SetupError, overall, run_case
+from .runner import RunReport, Settings, SetupError, overall, run_case, skill_commit
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,6 +44,9 @@ def _run(case, args) -> int:
         print("error: --runs must be at least 1", file=sys.stderr)
         return Verdict.UNJUDGEABLE.value
     settings = Settings(claude=args.claude, model=args.model, budget_usd=args.budget_usd, timeout_s=args.timeout)
+    commit = skill_commit(args.skill_root)
+    print(f"{case.id} probes {case.criterion}; skill root {args.skill_root} "
+          + (f"at {commit}" if commit else "is not in a git repo"))
     reports: list[RunReport] = []
     for n in range(1, args.runs + 1):
         try:

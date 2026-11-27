@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -245,6 +246,36 @@ class CommandLine(RunnerFixture):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("/2  PASS  receipt-before-tick"), 2, out)
         self.assertIn("2 passed, 0 failed, 0 unjudgeable of 2; $0.360 in all", out)
+
+    def test_the_output_names_the_criterion_and_the_skill_commit_that_ran(self):
+        self.follows_the_rule()
+        _, out = self.run_cli()
+        self.assertIn(f"receipt-before-tick probes P1-C1; skill root {self.kit} is not in a git repo", out)
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        for args in (["init", "-q"], ["add", "-A"],
+                     ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "kit"]):
+            subprocess.run(["git", "-C", str(self.kit), *args], check=True, env=env)
+        head = subprocess.run(["git", "-C", str(self.kit), "rev-parse", "HEAD"], capture_output=True, text=True, env=env)
+        _, out = self.run_cli()
+        self.assertEqual(out.splitlines()[0], f"receipt-before-tick probes P1-C1; skill root {self.kit} at {head.stdout.strip()}",
+                         "a receipt's evidence starts with the commit of the skill that ran")
+
+    def test_in_a_git_repo_only_files_git_does_not_ignore_are_staged(self):
+        self.follows_the_rule()
+        skills = self.kit / "plugins" / "bstack" / "skills"
+        (self.kit / ".gitignore").write_text("local-*.md\n")
+        (skills / "rule.md").write_text("tracked\n")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        for args in (["init", "-q"], ["add", "-A"],
+                     ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "kit"]):
+            subprocess.run(["git", "-C", str(self.kit), *args], check=True, env=env)
+        (skills / "local-override.md").write_text("ignored, so in no commit\n")
+        (skills / "draft.md").write_text("untracked, which receipt.py records as INCONCLUSIVE\n")
+        run_case(self.case, self.kit, self.settings, keep=self.dir / "kept")
+        staged = self.dir / "kept" / "plugins" / "bstack" / "skills"
+        self.assertTrue((staged / "rule.md").is_file(), "a tracked file is staged")
+        self.assertTrue((staged / "draft.md").is_file(), "an untracked file is staged")
+        self.assertFalse((staged / "local-override.md").exists(), "an ignored file is not staged")
 
     def test_a_setup_error_on_a_later_run_keeps_the_earlier_failure(self):
         self.plan(commands=["echo no receipt"], writes={"docs/P1.md": "- [x] **C1.**\n"})

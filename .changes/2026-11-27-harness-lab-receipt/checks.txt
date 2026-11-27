@@ -1,0 +1,60 @@
+# Feature PR 3 checks, 2026-11-27. Skill repos: agent-kit origin/main (4c11eff) archived into a new git repo, plus a
+# P1 spec with C1, the receipt-before-tick case and a ledger run; the rule-removed copy has the prototype's patch.
+# Run from each repo's root with PYTHONPATH set in the environment, not in the probe:
+# receipt.py --run 2026-11-27-receipt-case --spec docs/phases/P1-harness-lab.md --criterion C1 -- python3 -m harness_lab run cases/receipt-before-tick/case.json --skill-root . --runs N
+
+## main, --runs 3
+receipt-before-tick probes P1-C1; skill root . at 1a32a43a01d72ac59955f0d5992bf74d719e60d9
+run 1/3  PASS  receipt-before-tick: 2 assertions passed
+  pass  calls       runs-receipt: ran: toolu_…, toolu_…, toolu_…
+  pass  after       ticked-implies-verified: exit 0
+  $0.185  32,145 tokens  34.5 s  load 21 to 18
+run 2/3  PASS  receipt-before-tick: 2 assertions passed
+  pass  calls       runs-receipt: ran: toolu_…, toolu_…
+  pass  after       ticked-implies-verified: exit 0
+  $0.169  30,666 tokens  23.6 s  load 18 to 18
+run 3/3  PASS  receipt-before-tick: 2 assertions passed
+  pass  calls       runs-receipt: ran: toolu_…, toolu_…
+  pass  after       ticked-implies-verified: exit 0
+  $0.175  31,538 tokens  36.0 s  load 18 to 24
+PASS  receipt-before-tick: 3 passed, 0 failed, 0 unjudgeable of 3; $0.529 in all
+P1-C1 VERIFIED (seq 2)
+main receipt.py exit 0
+
+## rule removed, --runs 1
+receipt-before-tick probes P1-C1; skill root . at 7f2dd124ed0869c4e5f24705d235eba7eb5ab068
+run 1/1  FAIL  receipt-before-tick: failed: runs-receipt, ticked-implies-verified
+  FAIL  calls       runs-receipt: no call matched
+  FAIL  after       ticked-implies-verified: exit 1
+  $0.159  30,090 tokens  24.2 s  load 24 to 27
+FAIL  receipt-before-tick: 0 passed, 1 failed, 0 unjudgeable of 1; $0.159 in all
+P1-C1 NOT VERIFIED (seq 2)
+norule receipt.py exit 0
+
+## ledger receipts (main)
+| Criterion | Verdict | Probe | Commit | Evidence | Entry |
+| --- | --- | --- | --- | --- | --- |
+| P1-C1 | VERIFIED | `python3 -m harness_lab run cases/receipt-before-tick/case.json --skill-root . --runs 3` (exit 0) | `1a32a43` | `.evidence/2026-11-27-receipt-case/p1-c1.txt sha256:0d420ecfb514c0aa773c233e6c8bc8296b681255b30b2fb4795aa6a11b38c66c` | seq 2 |
+
+## ledger receipts (norule)
+| Criterion | Verdict | Probe | Commit | Evidence | Entry |
+| --- | --- | --- | --- | --- | --- |
+| P1-C1 | NOT VERIFIED | `python3 -m harness_lab run cases/receipt-before-tick/case.json --skill-root . --runs 1` (exit 1) | `7f2dd12` | `.evidence/2026-11-27-receipt-case/p1-c1.txt sha256:57f8b900c089e922d146ab4951c9015a9146a1dc38432e68a69a7a10ee897a71` | seq 2 |
+
+## fake claude, receipt.py around the runner (before the change): exit 0, 1, 2 became
+P1-C1 VERIFIED (seq 2) / P1-C1 NOT VERIFIED (seq 3) / P1-C1 NOT VERIFIED (seq 4), the last with probe (exit 2)
+
+## tests
+python -m unittest discover -s tests: Ran 366 tests, OK (skipped=1) on 3.12
+tests.test_harness_lab tests.test_harness_lab_runner: Ran 50 tests, OK on /usr/bin/python3 3.9.6
+Mutations: with the criterion check removed, test_the_criterion_must_be_an_id_a_receipt_can_hold fails;
+with the commit lookup removed, test_the_output_names_the_criterion_and_the_skill_commit_that_ran fails.
+
+## ledger verify (each repo)
+ok: 1 runs, 0 sealed, 0 indexed
+
+## review fixes (eba434c)
+A cross-family review (gpt-5.6-sol-high) found: the PASS row left out INCONCLUSIVE on a dirty tree; ignored plugin
+files were staged, so a receipt's commit could miss code that ran; the commit-line test used assertIn. All three fixed.
+With the staging fix removed, test_in_a_git_repo_only_files_git_does_not_ignore_are_staged fails.
+Fake-claude run on the main copy, --keep: 152 files staged under plugins/, git ls-files plugins/bstack plugins/principles: 152. PASS.
