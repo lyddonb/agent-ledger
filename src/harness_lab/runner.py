@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
+import sys
 import subprocess
 import tempfile
 import time
@@ -16,6 +18,7 @@ from .case import Case
 from .judge import Judgment, Verdict, judge, run_after_checks
 
 PASSED_ENV = ("PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG")
+_PLUGIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 class SetupError(ValueError):
@@ -54,6 +57,9 @@ def find_plugins(skill_root: Path, plugin: str) -> dict[str, Path]:
             raise SetupError(f"{manifest}: not a plugin manifest with a name ({e})") from e
         if not isinstance(name, str) or not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
             raise SetupError(f"{manifest}: 'name' must be a string and 'dependencies' a list of names")
+        bad = [d for d in deps if not _PLUGIN_NAME.fullmatch(d) or d in (".", "..")]
+        if bad:
+            raise SetupError(f"{manifest}: a dependency must be a plugin's name, not a path: {', '.join(bad)}")
         if name in found:
             continue
         found[name] = folder
@@ -85,10 +91,11 @@ def stage(case: Case, plugins: Mapping[str, Path], root: Path) -> tuple[Path, li
     repo = root / "repo"
     shutil.copytree(case.fixture, repo, ignore=shutil.ignore_patterns(".git"))
     git = ["git", "-C", str(repo)]
+    git_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     for args in (["init", "-q", "-b", "main"],
                  ["config", "user.name", "fixture"], ["config", "user.email", "fixture@example.invalid"],
                  ["add", "-A"], ["commit", "-q", "-m", "fixture", "--no-verify"]):
-        subprocess.run(git + args, check=True, stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        subprocess.run(git + args, check=True, env=git_env, stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     dirs = []
     for name, folder in plugins.items():
         dest = root / "plugins" / name
@@ -101,6 +108,12 @@ def run_case(case: Case, skill_root: Path, settings: Settings, keep: Path | None
     plugins = find_plugins(skill_root, case.plugin.as_posix())
     if not case.fixture.is_dir():
         raise SetupError(f"the fixture {case.fixture} is not a folder")
+    if keep is not None and keep.exists():
+        raise SetupError(f"--keep would overwrite {keep}")
+    temp = Path(tempfile.gettempdir()).resolve()
+    for inside in (skill_root.resolve(), case.directory.resolve()):
+        if temp == inside or inside in temp.parents:
+            raise SetupError(f"the temporary folder {temp} is inside {inside}, so a run could see it; set TMPDIR elsewhere")
     root = Path(tempfile.mkdtemp(prefix="harness-"))
     try:
         repo, plugin_dirs = stage(case, plugins, root)
@@ -137,7 +150,18 @@ def run_case(case: Case, skill_root: Path, settings: Settings, keep: Path | None
             shutil.copytree(root, keep)
         return RunReport(judgment, run.cost_usd, run.tokens, wall_s, load)
     finally:
-        shutil.rmtree(root, ignore_errors=True)
+        _remove(root)
+
+
+def _remove(root: Path) -> None:
+    for folder, subfolders, _ in os.walk(root):
+        for name in subfolders:
+            path = os.path.join(folder, name)
+            if not os.path.islink(path):
+                os.chmod(path, 0o700)
+    shutil.rmtree(root, ignore_errors=True)
+    if root.exists():
+        print(f"warning: could not delete {root}; it holds the run's transcript", file=sys.stderr)
 
 
 def overall(reports: Sequence[RunReport]) -> Verdict:

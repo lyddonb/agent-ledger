@@ -52,6 +52,8 @@ A case needs at least one assertion in `calls`, `never_calls` or `after`. An unk
 - `args` lists the input keys to look in, such as `["command"]` or `["file_path", "path"]`. A value that isn't a string is matched as compact JSON.
 - `match` is a regular expression searched for in each of those values.
 
+A case that should only pass when the skill really loaded says so: add a `calls` check on the `Skill` call, such as `{"id": "loads-beau-mode", "tool": "Skill", "args": ["skill"], "match": "beau-mode"}`. The runner checks that the plugin loaded, not that the agent used it.
+
 Subagent calls count the same as the main agent's calls. A rule like "never compute the numbers" holds for the whole run, whoever made the call.
 
 A call that the harness denied (a `deny` rule) or rejected before it ran (an unknown skill, bad input) counts for `never_calls` but not for `calls`. An attempt to break a rule is a failure even when the harness stops it. A required call that never ran was not made.
@@ -93,9 +95,11 @@ PYTHONPATH=src python3 -m harness_lab run CASE.json --skill-root ~/code/agent-ki
 3. Runs the `after` checks in `repo/`, and judges the stream with the plugin and its dependencies as the required plugins.
 4. Deletes the folder, unless `--keep DIR` asks for a copy. The stream holds the run's transcript, so it stays on this machine and never goes into a repo.
 
+Before it starts `claude`, the runner refuses a setup that would waste the run. It refuses a missing plugin or dependency, a dependency named by a path, a `--keep` folder that already exists, and a `TMPDIR` inside the skill repo or the case's folder. It runs its own `git` commands without the caller's `GIT_*` variables.
+
 A run is `UNJUDGEABLE` when `claude` exits non-zero or takes longer than `--timeout` (900 seconds). It is also `UNJUDGEABLE` for any reason the judge finds.
 
-It prints each run's verdict, its assertions, its cost, its tokens (input, output and cache writes), its wall time and the load average. Wall time on a busy machine says little, and cost and tokens are the numbers to compare. It exits 1 if any run failed, 2 if none failed and any run was `UNJUDGEABLE`, and 0 if every run passed. `--model` (default `sonnet`) and `--budget-usd` (default 2.00, per run) set the rest.
+It prints each run's verdict, its assertions, its cost, its tokens (input, output and cache writes), its wall time and the load average. Wall time on a busy machine says little, and cost and tokens are the numbers to compare. It exits 1 if any run failed, 2 if none failed and any run was `UNJUDGEABLE`, and 0 if every run passed. A setup error on a later run stops the runs there, and it counts as `UNJUDGEABLE` beside the runs before it. The total cost leaves out runs with no cost, such as a run that timed out before its result, and the summary says how many those were. `--model` (default `sonnet`) and `--budget-usd` (default 2.00, per run) set the rest.
 
 ## Judging a run by hand
 

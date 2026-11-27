@@ -49,8 +49,9 @@ def _run(case, args) -> int:
         try:
             report = run_case(case, args.skill_root, settings, args.keep / f"run-{n}" if args.keep else None)
         except (SetupError, OSError, subprocess.CalledProcessError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return Verdict.UNJUDGEABLE.value
+            print(f"error: run {n}: {e}", file=sys.stderr)
+            reports.append(RunReport(Judgment(Verdict.UNJUDGEABLE, (), str(e)), None, 0, 0.0, (0.0, 0.0)))
+            break
         reports.append(report)
         cost = f"${report.cost_usd:.3f}" if report.cost_usd is not None else "$?"
         print(f"run {n}/{args.runs}  ", end="")
@@ -59,8 +60,10 @@ def _run(case, args) -> int:
     verdict = overall(reports)
     counts = {v: sum(r.judgment.verdict is v for r in reports) for v in Verdict}
     spent = sum(r.cost_usd or 0 for r in reports)
+    unknown = sum(r.cost_usd is None for r in reports)
+    cost = f"${spent:.3f} in all" + (f", plus {unknown} run(s) whose cost is unknown" if unknown else "")
     print(f"{verdict.name}  {case.id}: {counts[Verdict.PASS]} passed, {counts[Verdict.FAIL]} failed, "
-          f"{counts[Verdict.UNJUDGEABLE]} unjudgeable of {len(reports)}; ${spent:.3f} in all")
+          f"{counts[Verdict.UNJUDGEABLE]} unjudgeable of {len(reports)}; {cost}")
     return verdict.value
 
 

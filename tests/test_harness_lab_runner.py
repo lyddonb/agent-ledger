@@ -33,6 +33,9 @@ names = [json.loads((pathlib.Path(d) / ".claude-plugin" / "plugin.json").read_te
 names = [n for n in names if n not in plan.get("unloaded", [])] + ["cc-plugin-builtin"]
 for path, text in plan.get("writes", {{}}).items():
     pathlib.Path(path).write_text(text)
+for path in plan.get("locked", []):
+    pathlib.Path(path, "inner").mkdir(parents=True)
+    os.chmod(path, 0)
 events = [{{"type": "system", "subtype": "init", "plugins": [{{"name": n}} for n in names]}}]
 for n, command in enumerate(plan.get("commands", [])):
     events.append({{"type": "assistant", "parent_tool_use_id": None, "message": {{"content": [
@@ -161,6 +164,46 @@ class RunCase(RunnerFixture):
         self.assertTrue((kept / "stream.jsonl").read_text().strip())
         self.assertIn("[x] **C1", (kept / "repo" / "docs" / "P1.md").read_text())
 
+    def test_the_runs_folder_is_deleted_even_when_the_agent_locked_a_folder_in_it(self):
+        self.follows_the_rule(locked=["locked"])
+        run_case(self.case, self.kit, self.settings)
+        self.assertFalse(Path(self.seen()["cwd"]).exists())
+
+    def test_the_callers_git_variables_do_not_reach_the_staging(self):
+        self.follows_the_rule()
+        other = self.dir / "other-repo"
+        other.mkdir()
+        with mock.patch.dict(os.environ, {"GIT_DIR": str(other / ".git"), "GIT_WORK_TREE": str(other)}):
+            report = run_case(self.case, self.kit, self.settings)
+        self.assertEqual(report.judgment.verdict, Verdict.PASS, report.judgment.reason)
+        self.assertEqual(len(self.seen()["commits"]), 1)
+        self.assertFalse((other / ".git").exists(), "nothing was written to the other repo")
+
+    def test_setups_that_would_waste_a_run_are_refused_before_claude_starts(self):
+        self.follows_the_rule()
+        kept = self.dir / "kept"
+        kept.mkdir()
+        outside = self.dir / "elsewhere" / ".claude-plugin" / "plugin.json"
+        outside.parent.mkdir(parents=True)
+        outside.write_text(json.dumps({"name": "elsewhere"}))
+        bad_dep = lambda: self.plugin("evil", ["../../elsewhere"])
+        cases = {
+            "--keep folder exists": lambda: run_case(self.case, self.kit, self.settings, keep=kept),
+            "TMPDIR inside the skill repo": lambda: (mock.patch.object(tempfile, "tempdir", str(self.kit)).start(),
+                                                    run_case(self.case, self.kit, self.settings)),
+        }
+        for label, attempt in cases.items():
+            with self.subTest(label):
+                try:
+                    with self.assertRaises(SetupError):
+                        attempt()
+                finally:
+                    mock.patch.stopall()
+                self.assertFalse((self.fake.parent / "seen.json").exists(), "claude was never started")
+        bad_dep()
+        with self.assertRaises(SetupError, msg="a dependency named by a path, even one that exists, is refused"):
+            find_plugins(self.kit, "plugins/evil")
+
     def test_a_missing_dependency_is_refused_before_anything_runs(self):
         shutil.rmtree(self.kit / "plugins" / "principles")
         with self.assertRaises(SetupError):
@@ -202,6 +245,13 @@ class CommandLine(RunnerFixture):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("/2  PASS  receipt-before-tick"), 2, out)
         self.assertIn("2 passed, 0 failed, 0 unjudgeable of 2; $0.360 in all", out)
+
+    def test_a_setup_error_on_a_later_run_keeps_the_earlier_failure(self):
+        self.plan(commands=["echo no receipt"], writes={"docs/P1.md": "- [x] **C1.**\n"})
+        (self.dir / "kept" / "run-2").mkdir(parents=True)
+        code, out = self.run_cli("--runs", "2", "--keep", str(self.dir / "kept"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("0 passed, 1 failed, 1 unjudgeable of 2", out)
 
     def test_a_failing_run_exits_1(self):
         self.plan(commands=["echo no receipt"], writes={"docs/P1.md": "- [x] **C1.**\n"})
