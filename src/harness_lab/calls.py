@@ -41,8 +41,8 @@ _REJECTED_PREFIX = "<tool_use_error>"
 def read_claude_stream(lines: Iterable[str]) -> Run:
     """Turn `claude -p --output-format stream-json --verbose` output into a Run.
 
-    `plugins` is None when no `init` event arrived. `ended` is the last `result` event's
-    subtype, or None when the stream has none. A run that resumed (a background task
+    `plugins` is None when no `init` event arrived, and otherwise the plugins every `init`
+    listed. `ended` is the last `result` event's subtype, or None when the stream has none. A run that resumed (a background task
     finishing) has several `init` and `result` events; its calls are all of them in order.
     """
     uses: list[tuple[dict, str | None]] = []
@@ -60,8 +60,9 @@ def read_claude_stream(lines: Iterable[str]) -> Run:
         if not isinstance(event, dict):
             raise StreamError(f"line {n} is not a JSON object")
         kind = event.get("type")
-        if kind == "system" and event.get("subtype") == "init" and plugins is None:
-            plugins = frozenset(p["name"] for p in event.get("plugins", []) if isinstance(p, dict) and "name" in p)
+        if kind == "system" and event.get("subtype") == "init":
+            loaded = frozenset(p["name"] for p in event.get("plugins", []) if isinstance(p, dict) and "name" in p)
+            plugins = loaded if plugins is None else plugins & loaded
         elif kind == "assistant":
             for block in _blocks(event):
                 if block.get("type") == "tool_use":

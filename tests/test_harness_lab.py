@@ -127,6 +127,11 @@ class LoadCase(CaseFiles):
         self.assertIn("fixture", self.problems(case_json(fixture="../elsewhere")))
         self.assertIn("plugin", self.problems(case_json(plugin="/abs/plugins/bstack")))
 
+    def test_a_key_given_twice_is_refused_so_one_pattern_cannot_hide_another(self):
+        text = json.dumps(case_json()).replace('"match": "^gh\\\\b"', '"match": "^gh\\\\b", "match": "^curl\\\\b"')
+        self.assertIn('"match": "^curl', text, "the test built a case with the key twice")
+        self.assertIn("match", self.problems(text))
+
     def test_a_file_that_is_not_json_is_a_case_error(self):
         self.assertIn("can't read", self.problems("{not json"))
 
@@ -262,6 +267,11 @@ class Unjudgeable(CaseFiles):
         s = Stream(plugins=["principles"])
         s.rejected("Skill", skill="beau-mode")
         self.assertUnjudgeable(self.good_call(s).result())
+
+    def test_a_resumed_turn_where_the_plugin_did_not_load(self):
+        s = self.good_call(Stream()).result().init(plugins=["principles"])
+        s.call("Bash", command="echo second turn")
+        self.assertUnjudgeable(s.result())
 
     def test_no_init_event(self):
         self.assertUnjudgeable(self.good_call(Stream(plugins=None)).result())

@@ -74,7 +74,7 @@ Each assertion passes or fails, and the run gets one verdict:
 |---|---|---|
 | `PASS` | 0 | Every assertion passed |
 | `FAIL` | 1 | An assertion failed |
-| `UNJUDGEABLE` | 2 | The run can't say anything about the skill: no `init` event, the plugin under test or one of its dependencies didn't load, no `result` event, the run ended in an error (such as hitting its budget), or the stream holds no tool calls at all |
+| `UNJUDGEABLE` | 2 | The run can't say anything about the skill: no `init` event, a required plugin (the one under test or a dependency) is missing from any `init` event, no `result` event, the run ended in an error (such as hitting its budget), or the stream holds no tool calls at all |
 
 A run where the plugin didn't load is `UNJUDGEABLE`, not `FAIL`. Otherwise a broken setup would read as a broken skill.
 
@@ -85,7 +85,7 @@ PYTHONPATH=src python3 -m harness_lab judge CASE.json --stream stream.jsonl --fi
   --require-plugin bstack --require-plugin principles
 ```
 
-It runs the `after` checks in `--fixture`, so pass the copy the agent worked in, not the case's own fixture. It prints one line per assertion and exits 0, 1 or 2. `--require-plugin` defaults to the folder name of the case's `plugin`.
+It runs the `after` checks in `--fixture`, so pass the copy the agent worked in, not the case's own fixture. It prints one line per assertion and exits 0, 1 or 2. `--require-plugin` defaults to the folder name of the case's `plugin` only. The judge doesn't read `plugin.json`, so pass each dependency with its own `--require-plugin`. The runner (Feature PR 2) reads them from `plugin.json`. Each `after` command gets 120 seconds. One that takes longer makes the run `UNJUDGEABLE`.
 
 ## The stream
 

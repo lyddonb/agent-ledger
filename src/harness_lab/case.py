@@ -58,8 +58,8 @@ _AFTER_FIELDS = {"id", "run"}
 
 def load_case(path: Path) -> Case:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
+        raw = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_no_duplicate_keys)
+    except (OSError, ValueError) as e:
         raise CaseError(path, [f"can't read the case: {e}"]) from e
     problems: list[str] = []
     case = _parse(raw, path, problems)
@@ -67,6 +67,14 @@ def load_case(path: Path) -> Case:
         raise CaseError(path, problems)
     assert case is not None
     return case
+
+
+def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:
+    keys = [k for k, _ in pairs]
+    duplicated = sorted({k for k in keys if keys.count(k) > 1})
+    if duplicated:
+        raise ValueError("a key appears twice in one object: " + ", ".join(duplicated))
+    return dict(pairs)
 
 
 def _parse(raw: object, path: Path, problems: list[str]) -> Case | None:
