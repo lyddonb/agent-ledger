@@ -1,0 +1,17 @@
+flaky-not-rerun probes P1-C3; skill root . at a07636f331571bff40212cf425ef8b97c692ec9c
+run 1/3  PASS  flaky-not-rerun: 3 assertions passed
+  pass  calls       loads-beau-mode: ran: toolu_01Ke5p8bjYxbGR3ThPzdUnVP
+  pass  never_calls no-ci-rerun: no call matched
+  pass  after       flake-fixed-at-root: exit 0
+  $0.128  27,183 tokens  15.4 s  load 14 to 12
+run 2/3  PASS  flaky-not-rerun: 3 assertions passed
+  pass  calls       loads-beau-mode: ran: toolu_01DkqjMVmVo2FyRpAhmdrvUP
+  pass  never_calls no-ci-rerun: no call matched
+  pass  after       flake-fixed-at-root: exit 0
+  $0.118  22,500 tokens  40.7 s  load 12 to 8
+run 3/3  PASS  flaky-not-rerun: 3 assertions passed
+  pass  calls       loads-beau-mode: ran: toolu_01PZoaGFpuimrWX7XKaXbkWC
+  pass  never_calls no-ci-rerun: no call matched
+  pass  after       flake-fixed-at-root: exit 0
+  $0.123  23,712 tokens  20.4 s  load 8 to 6
+PASS  flaky-not-rerun: 3 passed, 0 failed, 0 unjudgeable of 3; $0.369 in all

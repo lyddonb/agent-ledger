@@ -1,0 +1,7 @@
+qualitydirector-brief-numbers probes P1-C2; skill root . at a0a946e210ada8c4235da1b79e0aba4fb7484820
+run 1/1  FAIL  qualitydirector-brief-numbers: failed: brief-states-no-total
+  pass  calls       loads-qualitydirector: ran: toolu_01GRWKXyqBFkJ1r1oDWpX6Sx
+  pass  calls       runs-summary-json: ran: toolu_01EZ87NWD5GEDWM98x2z1fat, toolu_01PZ9SVRjtythzkRY4fSmKBj
+  FAIL  after       brief-states-no-total: exit 1
+  $0.245  52,815 tokens  20.4 s  load 14 to 12
+FAIL  qualitydirector-brief-numbers: 0 passed, 1 failed, 0 unjudgeable of 1; $0.245 in all
