@@ -20,9 +20,14 @@ See the charter's Plan section. In short: (1) entry model, hashing and verify; (
 ## M3 units
 
 ### M3 unit 1. Hard rules as tool-call checks
-**Status:** Prototype done (2026-11-21 and 2026-11-26, [notes](docs/notes/m3-unit1-prototype.md)).
-Feature PRs 1 to 3 of 5 done: the case format, the judge, the runner and a receipt from a case, in
-[`src/harness_lab`](src/harness_lab/README.md). PR 4, the three first cases in agent-kit, is next. The prototype found tool-call assertions alone too narrow: two of the three
+**Status:** Done, 2026-11-27. Feature PRs 1 to 4 are merged: the case format, the judge, the runner and a
+receipt from a case, in [`src/harness_lab`](src/harness_lab/README.md), and the three first cases in agent-kit
+(its pull requests 136, 137 and 140, criteria P1-C1 to P1-C3). The Done when was checked on agent-kit's main at
+`a07636f`: each case passed 3 of 3 runs, and each failed on a copy with its rule removed
+([record](.changes/2026-11-27-m3-unit1-done.json)). receipt-before-tick's patch had stopped applying to main;
+agent-kit pull request 153 rebuilds it and adds a test that every case's patch applies. Feature PR 5, a Cursor
+adapter, stays out of the unit until a Cursor run can be made hermetic. The prototype ran on 2026-11-21 and
+2026-11-26 ([notes](docs/notes/m3-unit1-prototype.md)). The prototype found tool-call assertions alone too narrow: two of the three
 first cases need a check on the fixture after the run. Beau accepted the `after` assertion kind
 on 2026-11-26 ("Accept after"), and the What line below includes it. The Feature lives in the
 `harness-lab` package, not a `ledger eval` subcommand, so `ledger`'s CLI contract stays as

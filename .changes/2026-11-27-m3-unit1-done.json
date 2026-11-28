@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "goal": "Close M3 unit 1 (hard rules as tool-call checks) on evidence from today's main, so agent-kit's R3, R13 and R25, which wait on it, can be weighed on their own triggers.",
+  "changed": [
+    "ROADMAP.md marks M3 unit 1 done on 2026-11-27. Feature PRs 1 to 4 are merged, and its Done when was checked on agent-kit's main. Feature PR 5, the Cursor adapter, stays outside the unit."
+  ],
+  "claims": [
+    {
+      "claim": "Each of the three first cases passes on agent-kit's main three times in a row.",
+      "verdict": "VERIFIED",
+      "check": "python3 -m harness_lab run cases/<case>/case.json --skill-root . --runs 3 for receipt-before-tick, qualitydirector-brief-numbers and flaky-not-rerun, at agent-kit a07636f, with this repo's main fba0d85 on PYTHONPATH",
+      "commit": "fba0d85",
+      "record": ".changes/2026-11-27-m3-unit1-done/main-receipt-before-tick.txt",
+      "remaining": "Three runs per case on Sonnet. flaky-not-rerun has a 20-run measure (agent-kit .changes/2026-11-27-beau-mode-known-flaky), the other two have 3 today plus 3 at their PRs. No receipt was recorded, since agent-kit's P1 boxes are already checked; main-qualitydirector-brief-numbers.txt and main-flaky-not-rerun.txt hold the other two."
+    },
+    {
+      "claim": "Each case fails on a copy of the same main with the skill edit that removes its rule.",
+      "verdict": "VERIFIED",
+      "check": "the same command with --runs 1, in a scratch repo built from git archive of a07636f with cases/<case>/rule-removed.patch applied; receipt-before-tick's patch no longer applied, so it ran on the same removal rebuilt against today's text, the patch agent-kit pull request 153 commits",
+      "commit": "fba0d85",
+      "record": ".changes/2026-11-27-m3-unit1-done/removed-receipt-before-tick.txt",
+      "remaining": "One failing run per case today. receipt-before-tick's rebuilt patch is in agent-kit pull request 153, not yet on main. removed-qualitydirector-brief-numbers.txt and removed-flaky-not-rerun.txt hold the other two."
+    }
+  ],
+  "next": [
+    {
+      "item": "Ask H10 again: should the cases run in agent-kit's CI?",
+      "source": "H10 (answered 2026-11-26: asked again after 20 or more runs per case and a flake rate)",
+      "why_now": "flaky-not-rerun has 20 runs on each copy; the other two cases have 6 each, so the trigger is not met for them yet.",
+      "impact": "A case in CI would catch a skill edit that drops a rule before it merges, instead of on a hand run."
+    }
+  ],
+  "release": {
+    "none": "A roadmap status change; no package code changes."
+  }
+}
